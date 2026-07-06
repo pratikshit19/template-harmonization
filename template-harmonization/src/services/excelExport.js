@@ -32,10 +32,31 @@ export const ExcelExport = (() => {
       ...docNames.map(name => {
         const count = clauseInventory.filter(c => c.docName === name).length;
         return [name, count];
+      }),
+      [],
+      [],
+      ['Template Tracking Sheet (Consolidation Action Log)'],
+      ['Template Name', 'Common Content %', 'Unique Clauses', 'Recommended Action'],
+      ...docNames.map(name => {
+        const docClauses = clauseInventory.filter(c => c.docName === name);
+        const totalClauses = docClauses.length;
+        let commonCount = 0;
+        docClauses.forEach(c => {
+          const group = sectionGroups.find(g =>
+            g.sections.some(s => s.docName === name && s.originalHeader === c.heading)
+          );
+          if (group && group.sections.length > 1) {
+            commonCount++;
+          }
+        });
+        const commonPercent = totalClauses > 0 ? Math.round((commonCount / totalClauses) * 100) : 0;
+        const uniqueCount = totalClauses - commonCount;
+        const action = commonPercent >= 50 ? 'Merge' : 'Separate Review';
+        return [name, `${commonPercent}%`, uniqueCount, action];
       })
     ];
     const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-    wsSummary['!cols'] = [{ wch: 35 }, { wch: 22 }, { wch: 22 }, { wch: 25 }];
+    wsSummary['!cols'] = [{ wch: 38 }, { wch: 22 }, { wch: 22 }, { wch: 25 }];
     XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary & Reduction');
 
     const inventoryHeaders = ['Clause ID', 'Template Source', 'Section / Clause Name', 'Clause Text Content'];

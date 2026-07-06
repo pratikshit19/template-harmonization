@@ -181,6 +181,60 @@ export default function DashboardPanel({ setCurrentStep, markStepComplete, unloc
             </table>
           </div>
         </div>
+      {/* Full-width Excel Tracking Sheet Dynamic Section */}
+      <div className="dashboard-card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '24px', marginBottom: '32px' }}>
+        <h4 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '8px', color: 'var(--text-primary)' }}>
+          Excel Tracking Sheet Analysis
+        </h4>
+        <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+          Calculated metrics mapping commonality thresholds, unique clause volumes, and recommended consolidation actions for each document.
+        </p>
+        
+        <div className="table-wrapper" style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--border)', background: 'rgba(0,0,0,0.2)' }}>
+                <th style={{ padding: '12px 14px', fontWeight: 600, color: 'var(--text-secondary)' }}>Template</th>
+                <th style={{ padding: '12px 14px', fontWeight: 600, color: 'var(--text-secondary)' }}>Common Content %</th>
+                <th style={{ padding: '12px 14px', fontWeight: 600, color: 'var(--text-secondary)' }}>Unique Clauses</th>
+                <th style={{ padding: '12px 14px', fontWeight: 600, color: 'var(--text-secondary)' }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {docsWithSections.map(doc => {
+                const totalSecs = doc.sections.length;
+                let commonCount = 0;
+                doc.sections.forEach(sec => {
+                  const group = sectionGroups.find(g =>
+                    g.sections.some(s => s.docName === doc.name && (s.originalHeader === sec.header || s.originalHeader === sec.rawHeader))
+                  );
+                  if (group && group.sections.length > 1) {
+                    commonCount++;
+                  }
+                });
+
+                const commonPercent = totalSecs > 0 ? Math.round((commonCount / totalSecs) * 100) : 0;
+                const uniqueCount = totalSecs - commonCount;
+                const action = commonPercent >= 50 ? 'Merge' : 'Separate Review';
+
+                return (
+                  <tr key={doc.name} style={{ borderBottom: '1px solid var(--border)' }}>
+                    <td style={{ padding: '12px 14px', fontWeight: 500 }}>{shortenName(doc.name)}</td>
+                    <td style={{ padding: '12px 14px', fontWeight: 600, color: 'var(--cyan)' }}>{commonPercent}%</td>
+                    <td style={{ padding: '12px 14px', fontWeight: 600, color: 'var(--teal)' }}>{uniqueCount}</td>
+                    <td style={{ padding: '12px 14px' }}>
+                      <span className={`sim-badge ${action === 'Merge' ? 'sim-badge-high' : 'sim-badge-med'}`}>
+                        {action}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
       </div>
 
       <div className="step-actions">
