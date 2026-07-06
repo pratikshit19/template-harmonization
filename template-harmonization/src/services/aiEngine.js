@@ -64,10 +64,131 @@ export const AIEngine = (() => {
     localStorage.removeItem('harmonize_gemini_key');
   }
 
-  async function callModel(prompt, opts = {}) {
-    const model = getModel();
-    if (!model) throw new Error('No model selected.');
+  function getMockResponse(prompt, opts) {
+    if (prompt.includes('Say "connected"')) {
+      return 'connected';
+    }
 
+    if (prompt.includes('TOP-LEVEL SECTION HEADINGS')) {
+      let sections = [];
+      try {
+        const startIdx = prompt.indexOf('[');
+        const endIdx = prompt.lastIndexOf(']');
+        if (startIdx !== -1 && endIdx !== -1) {
+          sections = JSON.parse(prompt.slice(startIdx, endIdx + 1));
+        }
+      } catch (e) {
+        console.error('Mock grouping parse error:', e);
+      }
+
+      if (sections.length === 0) {
+        sections = [
+          { docName: 'Template A.docx', header: '1. Overview', contentPreview: 'Overview description.' },
+          { docName: 'Template B.docx', header: 'Overview', contentPreview: 'Overview terms.' },
+          { docName: 'Template A.docx', header: '2. Payment Terms', contentPreview: 'Fees are paid in 30 days.' },
+          { docName: 'Template B.docx', header: 'Payment and Charges', contentPreview: 'Fees are net 30.' }
+        ];
+      }
+
+      const groupsMap = {};
+      sections.forEach(s => {
+        const cleanHeader = s.header.replace(/^[\d\.\s]+/i, '').replace(/[:\-\s]+$/i, '').trim().toLowerCase();
+        let foundGroup = Object.keys(groupsMap).find(gName => {
+          const cleanG = gName.toLowerCase();
+          return cleanG === cleanHeader || cleanG.includes(cleanHeader) || cleanHeader.includes(cleanG);
+        });
+        if (!foundGroup) {
+          foundGroup = s.header.replace(/^[\d\.\s]+/i, '').trim() || 'General Terms';
+          groupsMap[foundGroup] = [];
+        }
+        groupsMap[foundGroup].push({
+          docName: s.docName,
+          originalHeader: s.header
+        });
+      });
+
+      const groups = Object.entries(groupsMap).map(([groupName, secs]) => ({
+        groupName,
+        sections: secs
+      }));
+
+      return opts.json ? groups : JSON.stringify(groups);
+    }
+
+    if (prompt.includes('Similarity score') || (prompt.includes('Compare the following') && prompt.includes('similarity score'))) {
+      const docs = [];
+      const lines = prompt.split('\n');
+      lines.forEach(l => {
+        if (l.includes('--- Document') || l.includes('=== Document')) {
+          const m = l.match(/Document\s+\d+:\s*(.+)/i) || l.match(/===\s*(.+?)\s*===/i);
+          if (m && m[1]) {
+            const clean = m[1].replace(/===/g, '').trim();
+            if (!docs.includes(clean)) docs.push(clean);
+          }
+        }
+      });
+      if (docs.length < 2) {
+        docs.push('Template A.docx', 'Template B.docx');
+      }
+
+      const pairs = [];
+      for (let i = 0; i < docs.length; i++) {
+        for (let j = i + 1; j < docs.length; j++) {
+          pairs.push({
+            docA: docs[i],
+            docB: docs[j],
+            score: 75 + Math.floor(Math.random() * 21),
+            summary: 'Clauses cover similar legal themes with variations in region-specific phrasing.'
+          });
+        }
+      }
+      return opts.json ? pairs : JSON.stringify(pairs);
+    }
+
+    if (prompt.includes('Identify:') || (prompt.includes('Smart Tags') && prompt.includes('CLI Candidates'))) {
+      const match = prompt.match(/Analyze the following "([^"]+)" section/i);
+      const groupName = match ? match[1] : 'Section';
+
+      const cleanName = groupName.replace(/\s+/g, '_');
+      const smartTags = [
+        { tag: `{{${cleanName}_Effective_Date}}`, type: 'date', context: 'Standard start date' },
+        { tag: `{{${cleanName}_Governing_Law}}`, type: 'location', context: 'Governing jurisdiction' }
+      ];
+      const cliCandidates = [
+        { name: `${groupName} Core Provision`, category: 'General', textPreview: `Standard text for ${groupName}.`, sourceDoc: 'all' }
+      ];
+      const assemblyLogic = [
+        { rule: 'If governing law is New York, append New York addendum.', type: 'conditional_inclusion', affectedClause: groupName }
+      ];
+
+      const res = { smartTags, cliCandidates, assemblyLogic };
+      return opts.json ? res : JSON.stringify(res);
+    }
+
+    if (prompt.includes('Harmonize these') || prompt.includes('Write ONE "standard clause"')) {
+      const match = prompt.match(/Harmonize these \d+ versions of the "([^"]+)" section/i);
+      const groupName = match ? match[1] : 'Section';
+
+      let standardClause = `Approved standard provision for ${groupName}. All actions shall be performed in accordance with mutual guidelines.`;
+      const blocks = prompt.split('=== Version').slice(1);
+      if (blocks.length > 0) {
+        const text = blocks[0].split('\n').slice(1).join('\n').trim();
+        if (text.length > 50) standardClause = text;
+      }
+
+      const res = {
+        similarityLevel: 'medium',
+        standardClause: standardClause,
+        variations: [],
+        rationale: `Consolidated the standard terms for ${groupName} by prioritizing language completeness and semantic intent.`
+      };
+      return opts.json ? res : JSON.stringify(res);
+    }
+
+    return opts.json ? {} : '{}';
+  }
+
+  async function executeRequest(model, prompt, opts = {}) {
     if (model.startsWith('gemini')) {
       const key = getKey();
       if (!key) throw new Error('No Gemini API key set. Please enter it in Setup.');
@@ -186,8 +307,47 @@ export const AIEngine = (() => {
     }
   }
 
+  async function callModel(prompt, opts = {}) {
+    const model = getModel();
+    if (!model) throw new Error('No model selected.');
+
+    const activeKey = model.startsWith('gemini')
+      ? getKey()
+      : model.startsWith('openai')
+      ? getOpenAiKey()
+      : getAnthropicKey();
+
+    if (activeKey === 'mock-key') {
+      return getMockResponse(prompt, opts);
+    }
+
+    const maxRetries = 5;
+    let delay = 2000;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await executeRequest(model, prompt, opts);
+        return result;
+      } catch (err) {
+        const isRateLimit = err.message.toLowerCase().includes('quota') || 
+                            err.message.toLowerCase().includes('429') || 
+                            err.message.toLowerCase().includes('rate limit') ||
+                            err.message.toLowerCase().includes('limit exceeded') ||
+                            err.message.toLowerCase().includes('retry in');
+
+        if (isRateLimit && attempt < maxRetries && !opts.noRetry) {
+          console.warn(`Rate limit / Quota exceeded on attempt ${attempt}. Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          delay *= 2.5; // Exponential backoff
+          continue;
+        }
+        throw err;
+      }
+    }
+  }
+
   async function testConnection() {
-    const result = await callModel('Say "connected" and nothing else.', { maxTokens: 10 });
+    const result = await callModel('Say "connected" and nothing else.', { maxTokens: 10, noRetry: true });
     return typeof result === 'string' && result.length > 0;
   }
 
