@@ -2,10 +2,23 @@ import { FileSaver } from './fileSaver';
 
 export const Redline = (() => {
 
+  /**
+   * Tokenizes text into an array of words and whitespace segments.
+   * 
+   * @param {string} text - Raw input text.
+   * @returns {Array<string>} An array of tokens.
+   */
   function tokenize(text) {
     return text.match(/\S+|\s+/g) || [];
   }
 
+  /**
+   * Computes differences between two arrays of tokens using the LCS (Longest Common Subsequence) dynamic programming algorithm.
+   * 
+   * @param {Array<string>} tokensA - Original tokens list.
+   * @param {Array<string>} tokensB - Harmonized tokens list.
+   * @returns {Array<Object>} List of diff operations (equal, insert, delete).
+   */
   function diff(tokensA, tokensB) {
     const m = tokensA.length;
     const n = tokensB.length;
@@ -41,6 +54,12 @@ export const Redline = (() => {
     return ops.reverse();
   }
 
+  /**
+   * Merges contiguous operations of the same type to streamline HTML rendering tags.
+   * 
+   * @param {Array<Object>} ops - List of individual diff operations.
+   * @returns {Array<Object>} List of merged operations.
+   */
   function mergeOps(ops) {
     const merged = [];
     for (const op of ops) {
@@ -53,6 +72,14 @@ export const Redline = (() => {
     return merged;
   }
 
+  /**
+   * Computes difference markup between two text strings and produces inline HTML wrapping differences.
+   * Original deletions are wrapped in <del>, additions in <ins>.
+   * 
+   * @param {string} original - Original clause text.
+   * @param {string} harmonized - Consolidated standard clause text.
+   * @returns {string} Safe HTML string mapping visual redline diffs.
+   */
   function renderDiffHTML(original, harmonized) {
     const tokA = tokenize(original);
     const tokB = tokenize(harmonized);
@@ -72,6 +99,13 @@ export const Redline = (() => {
     return html;
   }
 
+  /**
+   * Computes addition and deletion metrics/percentages between original and consolidated text strings.
+   * 
+   * @param {string} original - The base clause content.
+   * @param {string} harmonized - The standard clause content.
+   * @returns {Object} Statistics detailing added, deleted, unchanged token counts and change rate.
+   */
   function diffStats(original, harmonized) {
     const tokA = tokenize(original);
     const tokB = tokenize(harmonized);
@@ -89,6 +123,14 @@ export const Redline = (() => {
     return { added, deleted, unchanged, changeRate };
   }
 
+  /**
+   * Generates a fully-styled standalone HTML document highlighting original to harmonized clause comparisons.
+   * 
+   * @param {Array<Object>} harmonizedResults - The harmonized output sections.
+   * @param {Array<Object>} sectionGroups - The raw section grouping clusters.
+   * @param {Array<string>} docNames - Array of active template filenames.
+   * @returns {string} The full HTML document source code.
+   */
   function generateRedlineDocument(harmonizedResults, sectionGroups, docNames) {
     const now = new Date().toLocaleString();
 
@@ -202,6 +244,12 @@ export const Redline = (() => {
 </html>`;
   }
 
+  /**
+   * Escapes standard HTML special characters to prevent script injection in inline markup.
+   * 
+   * @param {string} str - Raw string context.
+   * @returns {string} HTML-safe escaped string.
+   */
   function escHtmlInline(str) {
     return String(str)
       .replace(/&/g, '&amp;')
@@ -210,6 +258,13 @@ export const Redline = (() => {
       .replace(/"/g, '&quot;');
   }
 
+  /**
+   * Compiles the redline HTML document and attempts to export it to a PDF download.
+   * 
+   * @param {Array<Object>} harmonizedResults - Harmonized clause groups.
+   * @param {Array<Object>} sectionGroups - Raw section groups containing files.
+   * @param {Array<string>} docNames - Original document filenames.
+   */
   function downloadRedlinePDF(harmonizedResults, sectionGroups, docNames) {
     const html = generateRedlineDocument(harmonizedResults, sectionGroups, docNames);
     const jspdfLib = window.jspdf;
@@ -228,6 +283,13 @@ export const Redline = (() => {
     });
   }
 
+  /**
+   * Builds the redline HTML comparison report and downloads it locally.
+   * 
+   * @param {Array<Object>} harmonizedResults - Harmonized clause groups.
+   * @param {Array<Object>} sectionGroups - Raw section groups containing files.
+   * @param {Array<string>} docNames - Original document filenames.
+   */
   function downloadRedlineHTML(harmonizedResults, sectionGroups, docNames) {
     const html = generateRedlineDocument(harmonizedResults, sectionGroups, docNames);
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });

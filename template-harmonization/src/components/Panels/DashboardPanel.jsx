@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useHarmonize } from '../../context/HarmonizeContext';
 
+/**
+ * DashboardPanel Component.
+ * Computes, aggregates, and renders consolidation metrics, high duplication warnings,
+ * and a recommended modular clause structure tree for CLM template configuration.
+ * 
+ * @param {Object} props - Component properties.
+ * @param {function} props.setCurrentStep - Handler to update the current workflow step.
+ * @param {function} props.markStepComplete - Handler to mark a workflow step as complete.
+ * @param {function} props.unlockStep - Handler to unlock next steps.
+ * @returns {React.ReactElement} Renders the KPI and consolidation panel.
+ */
 export default function DashboardPanel({ setCurrentStep, markStepComplete, unlockStep }) {
   const {
     files,
@@ -20,6 +31,11 @@ export default function DashboardPanel({ setCurrentStep, markStepComplete, unloc
     country: true
   });
 
+  /**
+   * Toggles the collapse/expand state for folders in the modular architecture tree.
+   * 
+   * @param {string} key - Folder category name key.
+   */
   const toggleFolder = (key) => {
     setTreeOpen(prev => ({ ...prev, [key]: !prev[key] }));
   };
@@ -61,12 +77,21 @@ export default function DashboardPanel({ setCurrentStep, markStepComplete, unloc
   const sortedGroupsForRedundancy = [...sectionGroups].sort((a, b) => b.sections.length - a.sections.length);
   const topRedundancies = sortedGroupsForRedundancy.slice(0, 5);
 
+  /**
+   * Completes the current dashboard workflow step and redirects the user to the Export panel.
+   */
   const handleProceed = () => {
     markStepComplete('dashboard');
     unlockStep('export');
     setCurrentStep('export');
   };
 
+  /**
+   * Shortens template filename strings by removing extensions and slicing.
+   * 
+   * @param {string} name - Raw document filename.
+   * @returns {string} Clean formatted filename.
+   */
   const shortenName = (name) => {
     return name.replace(/\.docx?$/i, '').slice(0, 18);
   };

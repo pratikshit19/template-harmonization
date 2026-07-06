@@ -2,6 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { useHarmonize } from '../../context/HarmonizeContext';
 import { Harmonizer } from '../../services/harmonizer';
 
+/**
+ * AnnotatePanel Component.
+ * Automatically runs analysis on section groups to retrieve variables,
+ * candidate clauses (CLIs), and ordering/assembly logic, rendering them in categorized expandable cards.
+ * 
+ * @param {Object} props - Component properties.
+ * @param {function} props.toast - Toast message dispatch helper.
+ * @returns {React.ReactElement} Renders the step panel interface.
+ */
 export default function AnnotatePanel({ toast }) {
   const {
     sectionGroups,
@@ -39,6 +48,10 @@ export default function AnnotatePanel({ toast }) {
     }
   }, [sectionGroups, annotations]);
 
+  /**
+   * Executes the bulk annotation processing task across all section groups.
+   * Calls the Harmonizer service and tracks visual progress state.
+   */
   const runBulkAnnotation = async () => {
     setIsAnnotating(true);
     try {
@@ -123,10 +136,18 @@ export default function AnnotatePanel({ toast }) {
     runCtxAnnotation();
   }, []);
 
+  /**
+   * Navigates workflow to the Consolidation Dashboard step.
+   */
   const handleProceed = () => {
     startConsolidation(toast);
   };
 
+  /**
+   * Toggles the collapse/expand visibility state of a section card.
+   * 
+   * @param {string} groupName - Section group name identifier.
+   */
   const toggleCard = (groupName) => {
     setOpenCards(prev => ({ ...prev, [groupName]: !prev[groupName] }));
   };

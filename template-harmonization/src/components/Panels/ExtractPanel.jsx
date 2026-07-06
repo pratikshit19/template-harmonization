@@ -2,6 +2,15 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useHarmonize } from '../../context/HarmonizeContext';
 import { AIEngine } from '../../services/aiEngine';
 
+/**
+ * ExtractPanel Component.
+ * Displays comparison layouts for original template sections. Supports side-by-side scrolling/comparisons
+ * and grouped cards with triggering options to run individual section harmonization and annotation.
+ * 
+ * @param {Object} props - Component properties.
+ * @param {function} props.toast - Toast notifier callback.
+ * @returns {React.ReactElement} The render interface.
+ */
 export default function ExtractPanel({ toast }) {
   const {
     files,
@@ -23,6 +32,12 @@ export default function ExtractPanel({ toast }) {
   const [sbsPage, setSbsPage] = useState(0);
   const [loadingSections, setLoadingSections] = useState({}); // { [groupName]: boolean }
 
+  /**
+   * Escapes general special characters for safe inline HTML rendering context.
+   * 
+   * @param {string} str - Raw input text.
+   * @returns {string} Escaped string.
+   */
   const escHtml = (str) => {
     return String(str)
       .replace(/&/g, '&amp;')
@@ -32,11 +47,24 @@ export default function ExtractPanel({ toast }) {
       .replace(/'/g, '&#039;');
   };
 
+  /**
+   * Shortens a document filename by removing its file extension and capping string length.
+   * 
+   * @param {string} name - Raw document name.
+   * @returns {string} Sliced document name.
+   */
   const shortenDocName = (name) => {
     return name.replace(/\.docx?$/i, '').slice(0, 22) + (name.length > 26 ? '…' : '');
   };
 
   // Perform inline annotation and harmonization
+  /**
+   * Harmonizes and annotates a single section group inline via API engine requests.
+   * Updates state context immediately.
+   * 
+   * @param {string} groupName - Section group identifier.
+   * @param {Array<Object>} sections - Sub-sections array belonging to this group.
+   */
   const handleHarmonizeInline = async (groupName, sections) => {
     setLoadingSections(prev => ({ ...prev, [groupName]: true }));
     try {
@@ -71,6 +99,9 @@ export default function ExtractPanel({ toast }) {
     }
   };
 
+  /**
+   * Moves to the next step by triggering bulk template annotation.
+   */
   const handleProceed = async () => {
     // Navigate to next step and trigger bulk annotation run
     startBulkAnnotations(
@@ -86,7 +117,13 @@ export default function ExtractPanel({ toast }) {
   const totalSbsPages = Math.max(1, Math.ceil(docsWithSections.length / docsPerPage));
   const sbsDocs = docsWithSections.slice(sbsPage * docsPerPage, (sbsPage * docsPerPage) + docsPerPage);
 
+  /**
+   * Navigates side-by-side viewport back by one page.
+   */
   const handleSbsPrev = () => setSbsPage(prev => Math.max(0, prev - 1));
+  /**
+   * Navigates side-by-side viewport forward by one page.
+   */
   const handleSbsNext = () => setSbsPage(prev => Math.min(totalSbsPages - 1, prev + 1));
 
   return (
@@ -316,6 +353,13 @@ export default function ExtractPanel({ toast }) {
 }
 
 // --- GroupedSectionCard Sub-Component ---
+/**
+ * GroupedSectionCard Sub-Component.
+ * Renders an individual section card containing slider cards for each variant,
+ * conflict warnings, inline run controls, and generated harmonized output sections.
+ * 
+ * @returns {React.ReactElement} The card component.
+ */
 function GroupedSectionCard({
   group,
   index,
@@ -333,6 +377,9 @@ function GroupedSectionCard({
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
+  /**
+   * Evaluates card slider element dimensions to toggle arrow visibility.
+   */
   const checkScroll = () => {
     if (sliderRef.current) {
       const { scrollLeft, scrollWidth, clientWidth } = sliderRef.current;
@@ -347,6 +394,9 @@ function GroupedSectionCard({
     return () => window.removeEventListener('resize', checkScroll);
   }, [group.sections]);
 
+  /**
+   * Scrolls the variant card list horizontally to the left.
+   */
   const handleScrollLeft = () => {
     if (sliderRef.current) {
       sliderRef.current.scrollBy({ left: -360, behavior: 'smooth' });
@@ -354,6 +404,9 @@ function GroupedSectionCard({
     }
   };
 
+  /**
+   * Scrolls the variant card list horizontally to the right.
+   */
   const handleScrollRight = () => {
     if (sliderRef.current) {
       sliderRef.current.scrollBy({ left: 360, behavior: 'smooth' });

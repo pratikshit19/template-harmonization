@@ -5,6 +5,15 @@ import { ExcelExport } from '../../services/excelExport';
 import { GovernanceLog } from '../../services/governance';
 import { Redline } from '../../services/redline';
 
+/**
+ * ExportPanel Component.
+ * Provides downloadable deliverables for the completed template harmonization session.
+ * Exposes actions to export DOCX standard files, Excel configurations, audit tracking logs, and redline visual compare outputs.
+ * 
+ * @param {Object} props - Component properties.
+ * @param {function} props.toast - Toast notifier callback.
+ * @returns {React.ReactElement} The render interface of the export workspace.
+ */
 export default function ExportPanel({ toast }) {
   const {
     files,
@@ -22,6 +31,11 @@ export default function ExportPanel({ toast }) {
   const docNames = files.map(f => f.name);
 
   // Generate date stamp
+  /**
+   * Generates a date string in format YYYY-MM-DD for file timestamps.
+   * 
+   * @returns {string} Timestamp string.
+   */
   const dateStamp = () => new Date().toISOString().slice(0, 10);
 
   // Totals for Excel info
@@ -33,6 +47,10 @@ export default function ExportPanel({ toast }) {
 
   const variationCount = harmonizedResults.reduce((sum, h) => sum + (h.variations || []).length, 0);
 
+  /**
+   * Triggers the creation and browser download of the harmonized Word document.
+   * Falls back to a plain text file if compiling DOCX fails.
+   */
   const handleExportDocx = async () => {
     try {
       await Harmonizer.downloadAsDocx(harmonizedResults, `harmonized-template-${dateStamp()}.docx`);
@@ -48,6 +66,9 @@ export default function ExportPanel({ toast }) {
     }
   };
 
+  /**
+   * Triggers the generation and download of the CLM configuration Excel sheet.
+   */
   const handleExportExcel = () => {
     try {
       const wb = ExcelExport.generate(
@@ -66,11 +87,17 @@ export default function ExportPanel({ toast }) {
     }
   };
 
+  /**
+   * Triggers the download of the session's action log.
+   */
   const handleExportLog = () => {
     GovernanceLog.exportJSON();
     toast('Audit log downloaded!', 'success');
   };
 
+  /**
+   * Generates and downloads the redline track-changes HTML comparison output.
+   */
   const handleExportRedline = () => {
     try {
       Redline.downloadRedlineHTML(harmonizedResults, sectionGroups, docNames);
@@ -81,6 +108,9 @@ export default function ExportPanel({ toast }) {
     }
   };
 
+  /**
+   * Resets the active session and clears the state after asking for verification.
+   */
   const handleStartOver = () => {
     if (window.confirm('Start a new session? This will clear all current data.')) {
       resetSession();

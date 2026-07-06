@@ -25,6 +25,12 @@ const MODEL_CONFIG = {
   }
 };
 
+/**
+ * Helper utility to determine the provider key name matching a given model string.
+ * 
+ * @param {string} modelValue - Select option value.
+ * @returns {string} The active provider key name ('gemini', 'openai', or 'anthropic').
+ */
 function getProviderFromModel(modelValue) {
   if (!modelValue) return 'gemini';
   if (modelValue.startsWith('openai')) return 'openai';
@@ -32,6 +38,15 @@ function getProviderFromModel(modelValue) {
   return 'gemini';
 }
 
+/**
+ * HarmonizeProvider Component.
+ * The primary React context provider wrapping state management, upload queues,
+ * parsing buffers, and semantic AI pipeline triggers across the application's panels.
+ * 
+ * @param {Object} props - Properties.
+ * @param {React.ReactNode} props.children - Child components to render.
+ * @returns {React.ReactElement} Provider wrapper element.
+ */
 export const HarmonizeProvider = ({ children }) => {
   const [currentStep, setCurrentStep] = useState('setup');
   const [unlockedSteps, setUnlockedSteps] = useState({
@@ -75,6 +90,9 @@ export const HarmonizeProvider = ({ children }) => {
 
   // Sidebar toggle state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  /**
+   * Toggles the collapsible state of the sidebar.
+   */
   const toggleSidebar = () => setSidebarCollapsed(prev => !prev);
 
   // Load key on init or when activeModel changes
@@ -104,16 +122,32 @@ export const HarmonizeProvider = ({ children }) => {
     localStorage.setItem('harmonize_light_mode', lightTheme);
   }, [lightTheme]);
 
+  /**
+   * Toggles the UI light mode/dark mode theme state.
+   */
   const toggleTheme = () => setLightTheme(!lightTheme);
 
+  /**
+   * Unlocks the given step in the workflow process.
+   * 
+   * @param {string} step - The workflow step key.
+   */
   const unlockStep = (step) => {
     setUnlockedSteps(prev => ({ ...prev, [step]: true }));
   };
 
+  /**
+   * Marks a workflow step as completed.
+   * 
+   * @param {string} step - The step key identifier.
+   */
   const markStepComplete = (step) => {
     setCompletedSteps(prev => ({ ...prev, [step]: true }));
   };
 
+  /**
+   * Unlocks all workflow steps (used when an API key is verified/pre-saved).
+   */
   const unlockAllSteps = () => {
     setUnlockedSteps({
       setup: true,
@@ -126,11 +160,23 @@ export const HarmonizeProvider = ({ children }) => {
     });
   };
 
+  /**
+   * Updates the selected AI model and saves it to global storage.
+   * 
+   * @param {string} model - Selected model name key.
+   */
   const changeModel = (model) => {
     AIEngine.setModel(model);
     setActiveModel(model);
   };
 
+  /**
+   * Saves the provided API key for the active provider and triggers a lightweight connection verification query.
+   * On success, unlocks steps and marks setup as complete.
+   * 
+   * @param {string} key - Raw API key string.
+   * @returns {Promise<boolean>} True on success.
+   */
   const saveAndTestKey = async (key) => {
     const provider = getProviderFromModel(activeModel);
     const cfg = MODEL_CONFIG[provider];
@@ -160,6 +206,9 @@ export const HarmonizeProvider = ({ children }) => {
     }
   };
 
+  /**
+   * Clears the API key saved for the current provider in memory and storage.
+   */
   const clearSavedKey = () => {
     const provider = getProviderFromModel(activeModel);
     const cfg = MODEL_CONFIG[provider];
@@ -172,6 +221,9 @@ export const HarmonizeProvider = ({ children }) => {
   };
 
   // State Reset for starting over
+  /**
+   * Clears parsed buffers, lists, and workflow tracking states to prepare for a fresh session.
+   */
   const resetSession = () => {
     setFiles([]);
     setParsedDocs([]);
@@ -210,6 +262,12 @@ export const HarmonizeProvider = ({ children }) => {
     }
   };
 
+  /**
+   * Evaluates and adds supported (.docx or .xlsx) files to the upload queue.
+   * 
+   * @param {Array<File>} newFiles - Dragged or browsed files list.
+   * @returns {Object} Metric counts of skipped vs. added files.
+   */
   const addFiles = (newFiles) => {
     const supported = newFiles.filter(f => /\.(docx?|xlsx)/i.test(f.name));
     const skipped = newFiles.length - supported.length;
@@ -230,11 +288,23 @@ export const HarmonizeProvider = ({ children }) => {
     return { skipped, addedCount: supported.length };
   };
 
+  /**
+   * Removes a file from the active upload queue index.
+   * 
+   * @param {number} index - Index of file in array.
+   */
   const removeFile = (index) => {
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   // Steps execution triggers
+  /**
+   * Parses files, extracts sections, maps them to a clause inventory,
+   * clusters similar clauses, and triggers similarity scoring on the backend.
+   * 
+   * @param {function} onProcessingStateChange - Callback parameter to toggle modal loaders.
+   * @param {function} onToast - Toast notification dispatch.
+   */
   const startSectionDetection = async (onProcessingStateChange, onToast) => {
     setCurrentStep('inventory');
     onProcessingStateChange(true);
@@ -318,6 +388,12 @@ export const HarmonizeProvider = ({ children }) => {
   };
 
   // Update inline results for a specific section group
+  /**
+   * Updates or appends a single section's harmonization results inline.
+   * 
+   * @param {string} groupName - Section group key name.
+   * @param {Object} result - Harmonization payload result.
+   */
   const updateHarmonizedResultInline = (groupName, result) => {
     setHarmonizedResults(prev => {
       const idx = prev.findIndex(r => r.groupName === groupName);
@@ -331,6 +407,12 @@ export const HarmonizeProvider = ({ children }) => {
     });
   };
 
+  /**
+   * Inline updates the annotation details for a single section group.
+   * 
+   * @param {string} groupName - Section group key name.
+   * @param {Object} annotation - Annotation payload context.
+   */
   const updateAnnotationInline = (groupName, annotation) => {
     setAnnotations(prev => ({
       ...prev,
@@ -339,6 +421,12 @@ export const HarmonizeProvider = ({ children }) => {
   };
 
   // Run bulk annotations
+  /**
+   * Triggers the bulk semantic annotation flow across all section groups.
+   * 
+   * @param {function} onProgress - Progress reporting callback.
+   * @param {function} onToast - Toast notification callback.
+   */
   const startBulkAnnotations = async (onProgress, onToast) => {
     setCurrentStep('annotate');
     try {
@@ -360,6 +448,11 @@ export const HarmonizeProvider = ({ children }) => {
   };
 
   // Run bulk consolidation dashboard metrics
+  /**
+   * Auto-harmonizes any remaining sections in the background and consolidates dashboard metrics.
+   * 
+   * @param {function} onToast - Toast notification callback.
+   */
   const startConsolidation = async (onToast) => {
     setCurrentStep('dashboard');
     onToast('Consolidating templates & calculating metrics…', 'info');
@@ -390,6 +483,11 @@ export const HarmonizeProvider = ({ children }) => {
     }
   };
 
+  /**
+   * Routes the current workflow layout step to a specified unlocked panel key.
+   * 
+   * @param {string} step - Step key name.
+   */
   const navigateToStep = (step) => {
     if (unlockedSteps[step]) {
       setCurrentStep(step);
@@ -440,4 +538,9 @@ export const HarmonizeProvider = ({ children }) => {
   );
 };
 
+/**
+ * Custom React Hook to consume the Harmonize Context values.
+ * 
+ * @returns {Object} Complete Context API helper methods and variables.
+ */
 export const useHarmonize = () => useContext(HarmonizeContext);

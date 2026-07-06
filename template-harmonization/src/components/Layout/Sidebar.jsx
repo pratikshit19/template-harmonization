@@ -1,6 +1,12 @@
 import React from 'react';
 import { useHarmonize } from '../../context/HarmonizeContext';
 
+/**
+ * Sidebar component that displays the application brand logo, 
+ * workflow steps (Setup through Export), and the connection status of the AI models.
+ * 
+ * @returns {React.ReactElement} The rendered Sidebar component.
+ */
 export default function Sidebar() {
   const {
     currentStep,

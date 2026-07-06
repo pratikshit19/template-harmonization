@@ -10,10 +10,25 @@ import AnnotatePanel from './components/Panels/AnnotatePanel';
 import DashboardPanel from './components/Panels/DashboardPanel';
 import ExportPanel from './components/Panels/ExportPanel';
 
+/**
+ * AppContent Component.
+ * The core wrapper rendering layout views (Sidebar, Topbar) and determining which step panel to mount.
+ * Also renders connection loaders and global visual toast alerts.
+ * 
+ * @param {Object} props - Properties.
+ * @param {Array<Object>} props.toasts - Active global notifications.
+ * @param {function} props.addToast - Method to append a toast message.
+ * @returns {React.ReactElement} The rendered core workspace.
+ */
 function AppContent({ toasts, addToast }) {
   const { currentStep, sidebarCollapsed, setCurrentStep, markStepComplete, unlockStep } = useHarmonize();
   const [isProcessing, setIsProcessing] = useState(false);
 
+  /**
+   * Evaluates the currentStep state value and returns the appropriate panel element.
+   * 
+   * @returns {React.ReactElement} React component matching current workflow step.
+   */
   const renderActivePanel = () => {
     switch (currentStep) {
       case 'setup':
@@ -76,9 +91,22 @@ function AppContent({ toasts, addToast }) {
   );
 }
 
+/**
+ * App Component.
+ * The main container component initializing toast states and wrapping the application in the Harmonize Provider context.
+ * 
+ * @returns {React.ReactElement} Renders the root application layout.
+ */
 export default function App() {
   const [toasts, setToasts] = useState([]);
 
+  /**
+   * Appends a transient toast message notification payload to the current toast state.
+   * 
+   * @param {string} message - Text string of toast alert.
+   * @param {string} [type='info'] - Status category type ('success'|'error'|'warning'|'info').
+   * @param {number} [duration=4000] - Lifespan in milliseconds.
+   */
   const addToast = (message, type = 'info', duration = 4000) => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, message, type }]);

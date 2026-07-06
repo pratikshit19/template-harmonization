@@ -1,20 +1,39 @@
 import React, { useRef, useState } from 'react';
 import { useHarmonize } from '../../context/HarmonizeContext';
 
+/**
+ * UploadPanel Component.
+ * Implements file drop/browse workspace zones to upload .docx and .xlsx contract templates,
+ * displaying a preview card list and proceed controls.
+ * 
+ * @param {Object} props - Component properties.
+ * @param {function} props.setProcessing - Handler to set application loading state overlay.
+ * @param {function} props.toast - Toast notifier callback.
+ * @returns {React.ReactElement} Renders the file upload workspace zone.
+ */
 export default function UploadPanel({ setProcessing, toast }) {
   const { files, addFiles, removeFile, startSectionDetection } = useHarmonize();
   const fileInputRef = useRef(null);
   const [dragOver, setDragOver] = useState(false);
 
+  /**
+   * DragOver drag-and-drop event handler.
+   */
   const handleDragOver = (e) => {
     e.preventDefault();
     setDragOver(true);
   };
 
+  /**
+   * DragLeave drag-and-drop event handler.
+   */
   const handleDragLeave = () => {
     setDragOver(false);
   };
 
+  /**
+   * Drop drag-and-drop handler to process e.dataTransfer.files upload payload.
+   */
   const handleDrop = (e) => {
     e.preventDefault();
     setDragOver(false);
@@ -29,10 +48,16 @@ export default function UploadPanel({ setProcessing, toast }) {
     }
   };
 
+  /**
+   * Triggers virtual browse click on hidden HTML file input tag.
+   */
   const handleFileBrowseClick = () => {
     fileInputRef.current.click();
   };
 
+  /**
+   * File input change handler to process browse selected files.
+   */
   const handleFileChange = (e) => {
     if (e.target.files) {
       const { skipped, addedCount } = addFiles([...e.target.files]);
@@ -46,12 +71,21 @@ export default function UploadPanel({ setProcessing, toast }) {
     }
   };
 
+  /**
+   * Formats raw bytes integer into readable size context (B, KB, MB).
+   * 
+   * @param {number} bytes - Raw file size integer.
+   * @returns {string} Formatted size string.
+   */
   const formatBytes = (bytes) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  /**
+   * Proceeds to trigger AI-based section detection after verifying document count.
+   */
   const handleProceed = () => {
     if (files.length < 2) {
       toast('Please upload at least 2 documents to harmonize', 'warning');

@@ -1,10 +1,23 @@
 import React, { useState } from 'react';
 import { useHarmonize } from '../../context/HarmonizeContext';
 
+/**
+ * InventoryPanel Component.
+ * Displays a searchable tabular inventory of all parsed individual clauses across the templates,
+ * mapping each clause to its target file source, header, text preview, and ID.
+ * 
+ * @returns {React.ReactElement} The render interface.
+ */
 export default function InventoryPanel() {
   const { clauseInventory, setCurrentStep, markStepComplete, unlockStep } = useHarmonize();
   const [searchQuery, setSearchQuery] = useState('');
 
+  /**
+   * Escapes HTML markup characters.
+   * 
+   * @param {string} str - Raw text context.
+   * @returns {string} Escaped string content.
+   */
   const escHtml = (str) => {
     return String(str)
       .replace(/&/g, '&amp;')
@@ -14,6 +27,12 @@ export default function InventoryPanel() {
       .replace(/'/g, '&#039;');
   };
 
+  /**
+   * Shortens a document filename by removing its file extension and capping string length.
+   * 
+   * @param {string} name - Raw document name.
+   * @returns {string} Sliced document name.
+   */
   const shortenDocName = (name) => {
     return name.replace(/\.docx?$/i, '').slice(0, 22) + (name.length > 26 ? '…' : '');
   };
@@ -28,6 +47,9 @@ export default function InventoryPanel() {
            c.content.toLowerCase().includes(query);
   }).sort((a, b) => a.heading.localeCompare(b.heading));
 
+  /**
+   * Navigates the workflow step forward to the Section Heatmap/Harmonization panel.
+   */
   const handleProceed = () => {
     markStepComplete('inventory');
     unlockStep('extract');

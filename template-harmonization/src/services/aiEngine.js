@@ -12,6 +12,12 @@ export const AIEngine = (() => {
     'gemini-1.5-pro-latest'
   ];
 
+  /**
+   * Retrieves the current selected AI model name from localStorage.
+   * Falls back to DEFAULT_MODEL if not set or if the stored model is retired.
+   * 
+   * @returns {string} The active model identifier.
+   */
   function getModel() {
     const stored = localStorage.getItem('harmonize_gemini_model');
     if (!stored || RETIRED_MODELS.includes(stored)) {
@@ -21,6 +27,11 @@ export const AIEngine = (() => {
     return stored;
   }
 
+  /**
+   * Saves the chosen AI model identifier to localStorage.
+   * 
+   * @param {string} model - The model identifier to use.
+   */
   function setModel(model) {
     localStorage.setItem('harmonize_gemini_model', model);
   }
@@ -29,41 +40,86 @@ export const AIEngine = (() => {
   let _openAiKey = null;
   let _anthropicKey = null;
 
+  /**
+   * Sets the Gemini API key in memory and localStorage.
+   * 
+   * @param {string} key - The Gemini API key.
+   */
   function setKey(key) {
     _apiKey = key.trim();
     localStorage.setItem('harmonize_gemini_key', _apiKey);
   }
 
+  /**
+   * Sets the OpenAI API key in memory and localStorage.
+   * 
+   * @param {string} key - The OpenAI API key.
+   */
   function setOpenAiKey(key) {
     _openAiKey = key.trim();
     localStorage.setItem('harmonize_openai_key', _openAiKey);
   }
 
+  /**
+   * Sets the Anthropic API key in memory and localStorage.
+   * 
+   * @param {string} key - The Anthropic API key.
+   */
   function setAnthropicKey(key) {
     _anthropicKey = key.trim();
     localStorage.setItem('harmonize_anthropic_key', _anthropicKey);
   }
 
+  /**
+   * Retrieves the Gemini API key from memory or localStorage.
+   * 
+   * @returns {string|null} The API key if found, otherwise null.
+   */
   function getKey() {
     if (!_apiKey) _apiKey = localStorage.getItem('harmonize_gemini_key') || null;
     return _apiKey;
   }
 
+  /**
+   * Retrieves the OpenAI API key from memory or localStorage.
+   * 
+   * @returns {string|null} The API key if found, otherwise null.
+   */
   function getOpenAiKey() {
     if (!_openAiKey) _openAiKey = localStorage.getItem('harmonize_openai_key') || null;
     return _openAiKey;
   }
 
+  /**
+   * Retrieves the Anthropic API key from memory or localStorage.
+   * 
+   * @returns {string|null} The API key if found, otherwise null.
+   */
   function getAnthropicKey() {
     if (!_anthropicKey) _anthropicKey = localStorage.getItem('harmonize_anthropic_key') || null;
     return _anthropicKey;
   }
 
+  /**
+   * Clears the Gemini API key from memory and localStorage.
+   */
   function clearKey() {
     _apiKey = null;
     localStorage.removeItem('harmonize_gemini_key');
   }
 
+  /**
+   * Unified dispatcher to invoke the selected AI model's API.
+   * Handles model-specific endpoint, header, and prompt formatting payload mappings.
+   * Automatically parses JSON blocks if configured via options.
+   * 
+   * @param {string} prompt - The text prompt payload.
+   * @param {Object} [opts={}] - Configuration options.
+   * @param {number} [opts.temperature] - Temperature control.
+   * @param {number} [opts.maxTokens] - Limit of output tokens.
+   * @param {boolean} [opts.json] - Flag to request clean parsed JSON return format.
+   * @returns {Promise<string|Object>} The text response, or a parsed JSON object.
+   */
   async function callModel(prompt, opts = {}) {
     const model = getModel();
     if (!model) throw new Error('No model selected.');
@@ -186,11 +242,23 @@ export const AIEngine = (() => {
     }
   }
 
+  /**
+   * Verifies connectivity by sending a lightweight test query to the selected AI provider.
+   * 
+   * @returns {Promise<boolean>} True if the connection succeeded, false otherwise.
+   */
   async function testConnection() {
     const result = await callModel('Say "connected" and nothing else.', { maxTokens: 10 });
     return typeof result === 'string' && result.length > 0;
   }
 
+  /**
+   * Groups top-level document headings from multiple contract templates
+   * that share a common legal or business topic.
+   * 
+   * @param {Array<Object>} docsWithSections - Document sections payload list.
+   * @returns {Promise<Array<Object>>} List of group objects detailing cluster mappings.
+   */
   async function groupSections(docsWithSections) {
     const sectionList = [];
     for (const doc of docsWithSections) {
@@ -223,6 +291,13 @@ ${JSON.stringify(sectionList, null, 2)}`;
     return Array.isArray(groups) ? groups : [];
   }
 
+  /**
+   * Compares multiple versions of a section to assign semantic similarity scores between them.
+   * 
+   * @param {string} groupName - Cleaned canonical section title.
+   * @param {Array<Object>} variants - Individual text versions of the section.
+   * @returns {Promise<Array<Object>>} Pairwise similarity evaluations.
+   */
   async function scoreSimilarity(groupName, variants) {
     if (variants.length < 2) return [];
 
@@ -244,6 +319,15 @@ ${variants.map((v, i) => `--- Document ${i + 1}: ${v.docName} ---\n${v.content.s
     return Array.isArray(results) ? results : [];
   }
 
+  /**
+   * Analyzes section content versions to detect placeholders (Smart Tags),
+   * standalone clause candidates (CLIs), and assembly/conditional logic rules.
+   * 
+   * @param {string} groupName - The canonical group name.
+   * @param {Array<Object>} variants - Individual text versions of the section.
+   * @param {Array<string>} [knownSmartTags=[]] - Existing tags context to prioritize.
+   * @returns {Promise<Object>} Object containing detected smart tags, CLI candidates, and assembly rules.
+   */
   async function annotateSection(groupName, variants, knownSmartTags = []) {
     let knownTagsContext = '';
     if (knownSmartTags && knownSmartTags.length > 0) {
@@ -267,6 +351,15 @@ ${variants.map((v, i) => `=== Document ${i + 1}: ${v.docName} ===\n${v.content.s
     return result || { smartTags: [], cliCandidates: [], assemblyLogic: [] };
   }
 
+  /**
+   * Merges multiple section versions into a single unified standard clause.
+   * Provides variations and notes differences where relevant.
+   * 
+   * @param {string} groupName - Canonical section title.
+   * @param {Array<Object>} variants - Text versions of the section.
+   * @param {Object} [annotations=null] - Detected variables or placeholders context.
+   * @returns {Promise<Object>} Object containing standard clause text, variation options, and rationale.
+   */
   async function harmonizeSection(groupName, variants, annotations = null) {
     const annotationContext = annotations
       ? `\nIdentified smart tags for this section: ${JSON.stringify(annotations.smartTags || [])}\n`

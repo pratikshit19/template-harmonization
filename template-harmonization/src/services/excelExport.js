@@ -3,6 +3,18 @@ import { FileSaver } from './fileSaver';
 
 export const ExcelExport = (() => {
 
+  /**
+   * Generates a multi-sheet XLSX report containing metrics, clause inventories, 
+   * harmonization matrices, smart tag definitions, assembly rules, conflict flags, and audit logs.
+   * 
+   * @param {Array<Object>} sectionGroups - Categorized section grouping clusters.
+   * @param {Array<Object>} harmonizedResults - The outcome of template-harmonized standard clauses.
+   * @param {Array<string>} docNames - List of input template filenames.
+   * @param {Object} [annotations={}] - Mapping of group names to their extracted tags/assembly logic.
+   * @param {Array<Object>} [clauseInventory=[]] - Complete list of individual source clauses.
+   * @param {Object} [similarityData={}] - Similarity scores mapped between variants in groups.
+   * @returns {Object} A SheetJS Workbook object.
+   */
   function generate(sectionGroups, harmonizedResults, docNames, annotations = {}, clauseInventory = [], similarityData = {}) {
     const XLSX = window.XLSX;
     if (!XLSX) {
@@ -212,6 +224,13 @@ export const ExcelExport = (() => {
     return wb;
   }
 
+  /**
+   * Triggers a browser download of the generated workbook.
+   * Converts the workbook data to an array buffer and saves it as a Blob.
+   * 
+   * @param {Object} wb - The SheetJS Workbook object.
+   * @param {string} filename - Output name for the downloaded file.
+   */
   function download(wb, filename) {
     const XLSX = window.XLSX;
     if (!XLSX) {
@@ -222,6 +241,13 @@ export const ExcelExport = (() => {
     FileSaver.saveAs(blob, filename);
   }
 
+  /**
+   * Shortens document filename by stripping its extension and slicing to a max length.
+   * Used for clean display inside sheets.
+   * 
+   * @param {string} name - Raw document name.
+   * @returns {string} Sliced document name.
+   */
   function shortenName(name) {
     return name.replace(/\.docx?$/i, '').slice(0, 18);
   }

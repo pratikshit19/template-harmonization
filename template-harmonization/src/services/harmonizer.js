@@ -4,6 +4,16 @@ import { FileSaver } from './fileSaver';
 
 export const Harmonizer = (() => {
 
+  /**
+   * Iterates through all section groups to retrieve annotations (smart tags, CLIs, assembly rules) from the AI engine.
+   * Skips groups that are already annotated unless they contain errors.
+   * 
+   * @param {Array<Object>} sectionGroups - List of section groups.
+   * @param {Object} [existingAnnotations={}] - Pre-existing annotations map.
+   * @param {Array<string>} [excelSmartTags=[]] - Client-defined smart tags from Excel imports.
+   * @param {function} [onProgress] - Optional callback triggered on each progress step: (current, total, groupName).
+   * @returns {Promise<Object>} An object mapping group names to their annotations.
+   */
   async function annotateAll(sectionGroups, existingAnnotations = {}, excelSmartTags = [], onProgress) {
     const annotations = { ...existingAnnotations };
     const total = sectionGroups.length;
@@ -53,6 +63,16 @@ export const Harmonizer = (() => {
     return annotations;
   }
 
+  /**
+   * Harmonizes all section groups by prompting the AI engine to consolidate multiple versions of each section.
+   * Directly uses original content if a section only exists in a single template.
+   * 
+   * @param {Array<Object>} sectionGroups - List of section groups.
+   * @param {Object} annotations - The annotation map.
+   * @param {Array<Object>} [existingResults=[]] - Already harmonized results.
+   * @param {function} [onProgress] - Optional callback for tracking progress.
+   * @returns {Promise<Array<Object>>} Aggregated harmonization outcomes.
+   */
   async function harmonizeAll(sectionGroups, annotations, existingResults = [], onProgress) {
     const results = [ ...existingResults ];
     const total = sectionGroups.length;
@@ -136,6 +156,14 @@ export const Harmonizer = (() => {
     return results;
   }
 
+  /**
+   * Builds a plain-text version of the harmonized contract document.
+   * Formats headers, similarity levels, standard clauses, variations, and rationales.
+   * 
+   * @param {Array<Object>} harmonizedResults - The harmonized output sections.
+   * @param {string} [docTitle='Harmonized Template'] - The document title heading.
+   * @returns {string} The formatted plain text payload.
+   */
   function buildDocument(harmonizedResults, docTitle = 'Harmonized Template') {
     const lines = [
       docTitle.toUpperCase(),
@@ -176,6 +204,14 @@ export const Harmonizer = (() => {
     return lines.join('\n');
   }
 
+  /**
+   * Formats and compiles the harmonized templates into a polished Microsoft Word (.docx) document.
+   * Integrates color coding for similarity ratings, clear division borders, standard clauses,
+   * difference notes, and AI rationales, then triggers a local file download.
+   * 
+   * @param {Array<Object>} harmonizedResults - The harmonized output sections.
+   * @param {string} [filename='harmonized-template.docx'] - Target output filename.
+   */
   async function downloadAsDocx(harmonizedResults, filename = 'harmonized-template.docx') {
     const docx = window.docx;
     if (!docx) {
@@ -312,6 +348,12 @@ export const Harmonizer = (() => {
     FileSaver.saveAs(blob, filename);
   }
 
+  /**
+   * Generates a plain text file blob and triggers a browser download.
+   * 
+   * @param {string} content - Raw text content.
+   * @param {string} filename - Target output filename.
+   */
   function downloadAsText(content, filename) {
     const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     FileSaver.saveAs(blob, filename);

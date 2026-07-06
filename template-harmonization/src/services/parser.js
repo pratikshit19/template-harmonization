@@ -1,5 +1,12 @@
 export const Parser = (() => {
 
+  /**
+   * Extracts comments from a Word document zip archive.
+   * Parses the `word/comments.xml` file inside the zip to map comment IDs to their clean text content.
+   * 
+   * @param {Object} zip - The JSZip object containing the loaded DOCX file.
+   * @returns {Promise<Object>} An object mapping comment IDs to their corresponding text.
+   */
   async function extractComments(zip) {
     const commentsFile = zip.file("word/comments.xml");
     if (!commentsFile) return {};
@@ -32,6 +39,15 @@ export const Parser = (() => {
     }
   }
 
+  /**
+   * Associates the extracted Word document comments to their matching document sections.
+   * Scans `word/document.xml` for comment references and attaches them to the corresponding section objects.
+   * 
+   * @param {Object} zip - The JSZip object containing the loaded DOCX file.
+   * @param {Object} commentMap - A map of comment IDs to comment texts.
+   * @param {Array<Object>} sections - The array of detected sections in the document.
+   * @returns {Promise<void>}
+   */
   async function associateCommentsToSections(zip, commentMap, sections) {
     const docFile = zip.file("word/document.xml");
     if (!docFile || Object.keys(commentMap).length === 0 || sections.length === 0) return;
@@ -97,6 +113,13 @@ export const Parser = (() => {
     }
   }
 
+  /**
+   * Parses a DOCX file using mammoth to extract raw text and HTML,
+   * then detects sections and associates comments found inside the document structure.
+   * 
+   * @param {File} file - The file object corresponding to the uploaded DOCX document.
+   * @returns {Promise<Object>} A promise resolving to an object containing file metadata, full text/HTML, and detected sections.
+   */
   async function parseDocx(file) {
     const mammoth = window.mammoth;
     if (!mammoth) {
@@ -144,6 +167,13 @@ export const Parser = (() => {
     });
   }
 
+  /**
+   * Parses an XLSX file using SheetJS, reading rows from standard templates
+   * to extract clause definitions, conditions, and smart tags.
+   * 
+   * @param {File} file - The file object corresponding to the uploaded Excel sheet.
+   * @returns {Promise<Object>} A promise resolving to an object containing extracted sections and smart tags.
+   */
   async function parseXlsx(file) {
     const XLSX = window.XLSX;
     if (!XLSX) {
@@ -228,6 +258,13 @@ export const Parser = (() => {
     });
   }
 
+  /**
+   * Parses multiple document files (DOCX or XLSX) and aggregates results.
+   * Handles errors gracefully by attaching a status flag to each parsed document payload.
+   * 
+   * @param {Array<File>} files - List of uploaded files.
+   * @returns {Promise<Array<Object>>} A promise resolving to an array of parsed document objects.
+   */
   async function parseAll(files) {
     const results = [];
     for (const file of files) {
@@ -246,6 +283,14 @@ export const Parser = (() => {
     return results;
   }
 
+  /**
+   * Detects document sections. Prioritizes parsing HTML tags (H1-H3, strong paragraphs)
+   * before falling back to plain text heading regex rules.
+   * 
+   * @param {string} text - Raw plain text of the document.
+   * @param {string} html - HTML representation of the document.
+   * @returns {Array<Object>} List of section objects containing header, rawHeader, and content.
+   */
   function detectSections(text, html) {
     if (html) {
       const htmlSections = detectSectionsFromHtml(html);
@@ -256,6 +301,12 @@ export const Parser = (() => {
     return detectSectionsFromText(text);
   }
 
+  /**
+   * Detects sections based on HTML structure by evaluating H1-H3 headers and styled bold paragraphs.
+   * 
+   * @param {string} html - HTML string to be scanned.
+   * @returns {Array<Object>} List of parsed section objects.
+   */
   function detectSectionsFromHtml(html) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, 'text/html');
@@ -318,6 +369,12 @@ export const Parser = (() => {
     return sections;
   }
 
+  /**
+   * Detects sections based on plain text lines, identifying headings by regex rules.
+   * 
+   * @param {string} text - Plain text of the document.
+   * @returns {Array<Object>} List of section objects with header and body text.
+   */
   function detectSectionsFromText(text) {
     const lines = text.split('\n');
     const sections = [];
@@ -362,6 +419,13 @@ export const Parser = (() => {
     return sections;
   }
 
+  /**
+   * Determines if a given text line represents a first-level heading.
+   * Evaluates standard numbering (e.g., "1. Introduction"), section/article labels, and exclusions.
+   * 
+   * @param {string} line - The line of text to evaluate.
+   * @returns {boolean} True if the line is a first-level heading, false otherwise.
+   */
   function isFirstLevelHeading(line) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.length < 3) return false;
@@ -394,6 +458,13 @@ export const Parser = (() => {
     return false;
   }
 
+  /**
+   * Cleans a heading string by removing numbering, prefixes like "Section", "Article",
+   * and leading/trailing whitespace or punctuation characters.
+   * 
+   * @param {string} header - The raw heading string to clean.
+   * @returns {string} The cleaned heading name.
+   */
   function cleanHeadingName(header) {
     let cleaned = header.trim();
 

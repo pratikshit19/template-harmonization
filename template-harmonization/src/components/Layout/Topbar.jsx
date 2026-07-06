@@ -1,6 +1,12 @@
 import React from 'react';
 import { useHarmonize } from '../../context/HarmonizeContext';
 
+/**
+ * Topbar component that renders the page title, active step description,
+ * model selector drop-down, theme toggle switch, and responsive sidebar toggles.
+ * 
+ * @returns {React.ReactElement} The rendered Topbar component.
+ */
 export default function Topbar() {
   const {
     currentStep,

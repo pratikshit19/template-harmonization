@@ -3,6 +3,13 @@ import { Parser } from './parser';
 
 export const SectionDetector = (() => {
 
+  /**
+   * Processes successfully parsed documents and extracts section arrays.
+   * Special case handling maps Excel multi-template sheets to individual virtual files.
+   * 
+   * @param {Array<Object>} parsedDocs - List of parsed documents.
+   * @returns {Array<Object>} List of documents containing extracted section payloads.
+   */
   function extractSectionsFromDocs(parsedDocs) {
     const list = [];
     parsedDocs
@@ -39,6 +46,13 @@ export const SectionDetector = (() => {
     return list;
   }
 
+  /**
+   * Clusters section headings across multiple templates into semantic topic groups.
+   * Uses AI engine-based grouping and fuzzy matching, falling back to naive case/space matching if APIs fail.
+   * 
+   * @param {Array<Object>} docsWithSections - Document list containing their sections.
+   * @returns {Promise<Array<Object>>} Grouped list of sections.
+   */
   async function groupSections(docsWithSections) {
     try {
       const aiGroups = await AIEngine.groupSections(docsWithSections);
@@ -76,6 +90,13 @@ export const SectionDetector = (() => {
     }
   }
 
+  /**
+   * Performs fuzzy character matching on header titles to identify close equivalents.
+   * 
+   * @param {Object} docSections - Section map key-valued by headers.
+   * @param {string} header - The target header to seek.
+   * @returns {Object|null} Matching section object, or null if below similarity threshold.
+   */
   function findSectionFuzzy(docSections, header) {
     if (!docSections || !header) return null;
     const normalizedTarget = normalize(header);
@@ -97,6 +118,12 @@ export const SectionDetector = (() => {
     return bestScore > 0.5 ? bestMatch : null;
   }
 
+  /**
+   * Fallback clustering that aggregates sections based on key-normalizations of headers.
+   * 
+   * @param {Array<Object>} docsWithSections - Document list.
+   * @returns {Array<Object>} Aggregated naive section groups.
+   */
   function naiveGroup(docsWithSections) {
     const groupMap = {};
 
@@ -116,6 +143,12 @@ export const SectionDetector = (() => {
     return Object.values(groupMap).filter(g => g.sections.length > 0);
   }
 
+  /**
+   * Cleans strings by converting to lowercase and stripping punctuation/multiple spaces.
+   * 
+   * @param {string} s - Input string.
+   * @returns {string} Normalized string.
+   */
   function normalize(s) {
     return s.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
   }

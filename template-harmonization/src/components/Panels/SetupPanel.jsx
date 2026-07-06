@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useHarmonize } from '../../context/HarmonizeContext';
 
+/**
+ * SetupPanel Component.
+ * Renders the welcome hero screen and API key storage interface for Google Gemini, OpenAI, or Anthropic Claude.
+ * Displays helpful contract harmonization guidelines and practical examples.
+ * 
+ * @returns {React.ReactElement} The render interface.
+ */
 export default function SetupPanel() {
   const {
     activeModel,
@@ -49,6 +56,9 @@ export default function SetupPanel() {
 
   const config = providerConfigs[provider];
 
+  /**
+   * Saves the entered API key to localStorage and runs a lightweight connection verification query.
+   */
   const handleSaveAndTest = async () => {
     if (!inputVal.trim()) {
       alert(`Please enter your ${provider === 'gemini' ? 'Gemini' : provider === 'openai' ? 'OpenAI' : 'Anthropic'} API key`);
