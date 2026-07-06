@@ -220,6 +220,20 @@ export const HarmonizeProvider = ({ children }) => {
     setConnectionResult({ text: '', type: '' });
   };
 
+  const enableDemoMode = () => {
+    const provider = getProviderFromModel(activeModel);
+    const cfg = MODEL_CONFIG[provider];
+    cfg.setKey('mock-key');
+    setApiKeyInput('mock-key');
+    setConnectionStatus('connected');
+    setConnectionLabel(`${cfg.provider} (Offline Demo)`);
+    setConnectionResult({ text: '✓ Demo / Offline Mode activated — Steps unlocked', type: 'success' });
+    unlockAllSteps();
+    markStepComplete('setup');
+    GovernanceLog.log('api_key_set_offline', { provider: cfg.provider, timestamp: new Date().toISOString() });
+  };
+
+
   // State Reset for starting over
   /**
    * Clears parsed buffers, lists, and workflow tracking states to prepare for a fresh session.
@@ -524,6 +538,7 @@ export const HarmonizeProvider = ({ children }) => {
       changeModel,
       saveAndTestKey,
       clearSavedKey,
+      enableDemoMode,
       resetSession,
       addFiles,
       removeFile,

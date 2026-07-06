@@ -108,18 +108,6 @@ export const AIEngine = (() => {
     localStorage.removeItem('harmonize_gemini_key');
   }
 
-  /**
-   * Unified dispatcher to invoke the selected AI model's API.
-   * Handles model-specific endpoint, header, and prompt formatting payload mappings.
-   * Automatically parses JSON blocks if configured via options.
-   * 
-   * @param {string} prompt - The text prompt payload.
-   * @param {Object} [opts={}] - Configuration options.
-   * @param {number} [opts.temperature] - Temperature control.
-   * @param {number} [opts.maxTokens] - Limit of output tokens.
-   * @param {boolean} [opts.json] - Flag to request clean parsed JSON return format.
-   * @returns {Promise<string|Object>} The text response, or a parsed JSON object.
-   */
   async function callModel(prompt, opts = {}) {
     const model = getModel();
     if (!model) throw new Error('No model selected.');
@@ -242,13 +230,52 @@ export const AIEngine = (() => {
     }
   }
 
+  async function callModel(prompt, opts = {}) {
+    const model = getModel();
+    if (!model) throw new Error('No model selected.');
+
+    const activeKey = model.startsWith('gemini')
+      ? getKey()
+      : model.startsWith('openai')
+        ? getOpenAiKey()
+        : getAnthropicKey();
+
+    if (activeKey === 'mock-key') {
+      return getMockResponse(prompt, opts);
+    }
+
+    const maxRetries = 5;
+    let delay = 2000;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const result = await executeRequest(model, prompt, opts);
+        return result;
+      } catch (err) {
+        const isRateLimit = err.message.toLowerCase().includes('quota') ||
+          err.message.toLowerCase().includes('429') ||
+          err.message.toLowerCase().includes('rate limit') ||
+          err.message.toLowerCase().includes('limit exceeded') ||
+          err.message.toLowerCase().includes('retry in');
+
+        if (isRateLimit && attempt < maxRetries && !opts.noRetry) {
+          console.warn(`Rate limit / Quota exceeded on attempt ${attempt}. Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          delay *= 2.5; // Exponential backoff
+          continue;
+        }
+        throw err;
+      }
+    }
+  }
+
   /**
    * Verifies connectivity by sending a lightweight test query to the selected AI provider.
    * 
    * @returns {Promise<boolean>} True if the connection succeeded, false otherwise.
    */
   async function testConnection() {
-    const result = await callModel('Say "connected" and nothing else.', { maxTokens: 10 });
+    const result = await callModel('Say "connected" and nothing else.', { maxTokens: 10, noRetry: true });
     return typeof result === 'string' && result.length > 0;
   }
 
