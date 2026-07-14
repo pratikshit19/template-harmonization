@@ -21,7 +21,7 @@ import ExportPanel from './components/Panels/ExportPanel';
  * @returns {React.ReactElement} The rendered core workspace.
  */
 function AppContent({ toasts, addToast }) {
-  const { currentStep, sidebarCollapsed, setCurrentStep, markStepComplete, unlockStep } = useHarmonize();
+  const { currentStep, sidebarCollapsed, setCurrentStep, markStepComplete, unlockStep, analysisProgress } = useHarmonize();
   const [isProcessing, setIsProcessing] = useState(false);
 
   /**
@@ -67,9 +67,11 @@ function AppContent({ toasts, addToast }) {
         <Topbar />
         
         {isProcessing && (
-          <div className="ai-processing-banner" style={{ margin: '32px 32px 0 32px', display: 'flex' }}>
-            <div className="processing-pulse"></div>
-            <span>AI is parsing documents and extracting clauses… Please wait.</span>
+          <div className="progress-banner" style={{ margin: '32px 32px 0 32px', display: 'flex', alignItems: 'center' }}>
+            <div className="progress-bar" style={{ flex: 1, height: '8px', background: 'var(--bg-card)', borderRadius: '4px', overflow: 'hidden', marginRight: '8px' }}>
+              <div className="progress-bar-inner" style={{ width: `${analysisProgress}%`, height: '100%', background: 'var(--blue)', transition: 'width 0.3s ease' }}></div>
+            </div>
+            <span>Processing ({analysisProgress}%)</span>
           </div>
         )}
 

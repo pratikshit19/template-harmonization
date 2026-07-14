@@ -1,21 +1,24 @@
+import { GoogleGenAI } from '@google/genai';
+import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 import { GovernanceLog } from './governance';
 
 export const AIEngine = (() => {
-  const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
-  const DEFAULT_MODEL = 'gemini-2.5-flash';
+  const DEFAULT_MODEL = 'gemini-2.0-flash';
 
   const RETIRED_MODELS = [
+    'gemini-2.5-flash',          // deprecated for new users — use gemini-2.0-flash
+    'gemini-1.5-flash',
     'gemini-1.5-flash-latest',
     'gemini-1-5-pro-latest',
     'gemini-1-5-pro',
-    'gemini-pro',
     'gemini-1.5-pro-latest'
   ];
 
   /**
    * Retrieves the current selected AI model name from localStorage.
    * Falls back to DEFAULT_MODEL if not set or if the stored model is retired.
-   * 
+   *
    * @returns {string} The active model identifier.
    */
   function getModel() {
@@ -29,7 +32,7 @@ export const AIEngine = (() => {
 
   /**
    * Saves the chosen AI model identifier to localStorage.
-   * 
+   *
    * @param {string} model - The model identifier to use.
    */
   function setModel(model) {
@@ -40,63 +43,77 @@ export const AIEngine = (() => {
   let _openAiKey = null;
   let _anthropicKey = null;
 
+  // SDK client instances — lazily created and cached per key
+  let _geminiClient = null;
+  let _openaiClient = null;
+  let _anthropicClient = null;
+
   /**
-   * Sets the Gemini API key in memory and localStorage.
-   * 
+   * Sets the Gemini API key in memory and localStorage, invalidating the cached client.
+   *
    * @param {string} key - The Gemini API key.
    */
   function setKey(key) {
     _apiKey = key.trim();
     localStorage.setItem('harmonize_gemini_key', _apiKey);
+    _geminiClient = null; // reset cached client
   }
 
   /**
-   * Sets the OpenAI API key in memory and localStorage.
-   * 
+   * Sets the OpenAI API key in memory and localStorage, invalidating the cached client.
+   *
    * @param {string} key - The OpenAI API key.
    */
   function setOpenAiKey(key) {
     _openAiKey = key.trim();
     localStorage.setItem('harmonize_openai_key', _openAiKey);
+    _openaiClient = null; // reset cached client
   }
 
   /**
-   * Sets the Anthropic API key in memory and localStorage.
-   * 
+   * Sets the Anthropic API key in memory and localStorage, invalidating the cached client.
+   *
    * @param {string} key - The Anthropic API key.
    */
   function setAnthropicKey(key) {
     _anthropicKey = key.trim();
     localStorage.setItem('harmonize_anthropic_key', _anthropicKey);
+    _anthropicClient = null; // reset cached client
   }
 
   /**
-   * Retrieves the Gemini API key from memory or localStorage.
-   * 
+   * Retrieves the Gemini API key from memory, environment variables, or localStorage.
+   *
    * @returns {string|null} The API key if found, otherwise null.
    */
   function getKey() {
-    if (!_apiKey) _apiKey = localStorage.getItem('harmonize_gemini_key') || null;
+    if (!_apiKey) {
+      _apiKey = import.meta.env.VITE_GEMINI_API_KEY || localStorage.getItem('harmonize_gemini_key') || null;
+    }
     return _apiKey;
   }
 
   /**
-   * Retrieves the OpenAI API key from memory or localStorage.
-   * 
+   * Retrieves the OpenAI API key from memory, environment variables, or localStorage.
+   *
    * @returns {string|null} The API key if found, otherwise null.
    */
   function getOpenAiKey() {
-    if (!_openAiKey) _openAiKey = localStorage.getItem('harmonize_openai_key') || null;
+    if (!_openAiKey) {
+      _openAiKey = import.meta.env.VITE_OPENAI_API_KEY || localStorage.getItem('harmonize_openai_key') || null;
+    }
     return _openAiKey;
   }
 
   /**
-   * Retrieves the Anthropic API key from memory or localStorage.
-   * 
+   * Retrieves the Anthropic API key from memory, environment variables, or localStorage.
+   *
    * @returns {string|null} The API key if found, otherwise null.
    */
   function getAnthropicKey() {
-    if (!_anthropicKey) _anthropicKey = localStorage.getItem('harmonize_anthropic_key') || null;
+    if (!_anthropicKey) {
+      _anthropicKey = import.meta.env.VITE_ANTHROPIC_API_KEY || localStorage.getItem('harmonize_anthropic_key') || null;
+    }
     return _anthropicKey;
   }
 
@@ -105,158 +122,174 @@ export const AIEngine = (() => {
    */
   function clearKey() {
     _apiKey = null;
+    _geminiClient = null;
     localStorage.removeItem('harmonize_gemini_key');
   }
 
-  async function callModel(prompt, opts = {}) {
-    const model = getModel();
-    if (!model) throw new Error('No model selected.');
-
-    if (model.startsWith('gemini')) {
-      const key = getKey();
-      if (!key) throw new Error('No Gemini API key set. Please enter it in Setup.');
-      const url = `${GEMINI_BASE}/${model}:generateContent?key=${key}`;
-      const body = {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: opts.temperature ?? 0.3,
-          maxOutputTokens: opts.maxTokens ?? 8192
-        }
-      };
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error?.message || `Gemini API error ${res.status}`);
-      }
-      const data = await res.json();
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      if (opts.json) {
-        try {
-          const cleaned = text
-            .replace(/^```json\s*/i, '')
-            .replace(/^```\s*/i, '')
-            .replace(/\s*```$/i, '')
-            .trim();
-          return JSON.parse(cleaned);
-        } catch {
-          throw new Error(`AI returned invalid JSON: ${text.slice(0, 300)}`);
-        }
-      }
-      return text;
-
-    } else if (model.startsWith('openai')) {
-      const key = getOpenAiKey();
-      if (!key) throw new Error('No OpenAI API key set. Please enter it in Setup.');
-      const url = 'https://api.openai.com/v1/chat/completions';
-      const body = {
-        model: model.replace('openai-', ''),
-        messages: [{ role: 'user', content: prompt }],
-        temperature: opts.temperature ?? 0.3,
-        max_tokens: Math.min(opts.maxTokens ?? 4096, 4096)
-      };
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-        body: JSON.stringify(body)
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error?.message || `OpenAI API error ${res.status}`);
-      }
-      const data = await res.json();
-      const text = data?.choices?.[0]?.message?.content || '';
-      if (opts.json) {
-        try {
-          const cleaned = text
-            .replace(/^```json\s*/i, '')
-            .replace(/^```\s*/i, '')
-            .replace(/\s*```$/i, '')
-            .trim();
-          return JSON.parse(cleaned);
-        } catch {
-          throw new Error(`AI returned invalid JSON: ${text.slice(0, 300)}`);
-        }
-      }
-      return text;
-
-    } else if (model.startsWith('anthropic')) {
-      const key = getAnthropicKey();
-      if (!key) throw new Error('No Anthropic API key set. Please enter it in Setup.');
-
-      const url = 'https://corsproxy.io/?' + encodeURIComponent('https://api.anthropic.com/v1/messages');
-      const body = {
-        model: model.replace('anthropic-', ''),
-        max_tokens: Math.min(opts.maxTokens ?? 4096, 4096),
-        temperature: opts.temperature ?? 0.3,
-        system: '',
-        messages: [{ role: 'user', content: prompt }]
-      };
-
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': key,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
-        },
-        body: JSON.stringify(body)
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error?.message || `Anthropic API error ${res.status}`);
-      }
-      const data = await res.json();
-      const text = data?.content?.[0]?.text || '';
-      if (opts.json) {
-        try {
-          const cleaned = text
-            .replace(/^```json\s*/i, '')
-            .replace(/^```\s*/i, '')
-            .replace(/\s*```$/i, '')
-            .trim();
-          return JSON.parse(cleaned);
-        } catch {
-          throw new Error(`AI returned invalid JSON: ${text.slice(0, 300)}`);
-        }
-      }
-      return text;
-    } else {
-      throw new Error(`Unsupported model: ${model}`);
+  /**
+   * Returns (or lazily creates) the Google GenAI SDK client.
+   *
+   * @returns {GoogleGenAI} Configured Gemini client.
+   */
+  function getGeminiClient() {
+    const key = getKey();
+    if (!key) throw new Error('No Gemini API key set. Please enter it in Setup.');
+    if (!_geminiClient) {
+      _geminiClient = new GoogleGenAI({ apiKey: key });
     }
+    return _geminiClient;
   }
 
+  /**
+   * Returns (or lazily creates) the OpenAI SDK client.
+   *
+   * @returns {OpenAI} Configured OpenAI client.
+   */
+  function getOpenAIClient() {
+    const key = getOpenAiKey();
+    if (!key) throw new Error('No OpenAI API key set. Please enter it in Setup.');
+    if (!_openaiClient) {
+      _openaiClient = new OpenAI({ apiKey: key, dangerouslyAllowBrowser: true });
+    }
+    return _openaiClient;
+  }
+
+  /**
+   * Returns (or lazily creates) the Anthropic SDK client.
+   *
+   * @returns {Anthropic} Configured Anthropic client.
+   */
+  function getAnthropicClient() {
+    const key = getAnthropicKey();
+    if (!key) throw new Error('No Anthropic API key set. Please enter it in Setup.');
+    if (!_anthropicClient) {
+      _anthropicClient = new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true });
+    }
+    return _anthropicClient;
+  }
+
+  /**
+   * Strips markdown code fences from an AI text response and parses it as JSON.
+   *
+   * @param {string} text - Raw text from the model.
+   * @returns {Object} Parsed JSON object.
+   */
+  function parseJsonResponse(text) {
+    const cleaned = text
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+    return JSON.parse(cleaned);
+  }
+
+  /**
+   * Unified dispatcher to invoke the selected AI model's SDK.
+   * Handles Gemini, OpenAI, and Anthropic via their official SDKs — no raw fetch calls.
+   * Automatically parses JSON blocks if configured via options.
+   * Retries automatically on rate-limit / quota errors with exponential backoff.
+   *
+   * @param {string} prompt - The text prompt payload.
+   * @param {Object} [opts={}] - Configuration options.
+   * @param {number} [opts.temperature] - Temperature control (0.0–1.0).
+   * @param {number} [opts.maxTokens] - Limit of output tokens.
+   * @param {boolean} [opts.json] - Flag to request clean parsed JSON return format.
+   * @param {boolean} [opts.noRetry] - When true, disables automatic retry on rate-limit errors.
+   * @returns {Promise<string|Object>} The text response, or a parsed JSON object.
+   */
   async function callModel(prompt, opts = {}) {
     const model = getModel();
     if (!model) throw new Error('No model selected.');
 
-    const activeKey = model.startsWith('gemini')
-      ? getKey()
-      : model.startsWith('openai')
-        ? getOpenAiKey()
-        : getAnthropicKey();
+    /**
+     * Performs the actual SDK call for the active model.
+     *
+     * @returns {Promise<string|Object>} Parsed or raw response text.
+     */
+    async function executeRequest() {
 
-    if (activeKey === 'mock-key') {
-      return getMockResponse(prompt, opts);
+      // ── Gemini via @google/genai SDK ──────────────────────────────────────
+      if (model.startsWith('gemini')) {
+        const client = getGeminiClient();
+        const response = await client.models.generateContent({
+          model,
+          contents: prompt,
+          config: {
+            temperature: opts.temperature ?? 0.3,
+            maxOutputTokens: opts.maxTokens ?? 8192,
+          },
+        });
+        const text = response.text ?? '';
+        if (opts.json) {
+          try {
+            return parseJsonResponse(text);
+          } catch {
+            throw new Error(`AI returned invalid JSON: ${text.slice(0, 300)}`);
+          }
+        }
+        return text;
+
+      // ── OpenAI via openai SDK ─────────────────────────────────────────────
+      } else if (model.startsWith('openai')) {
+        const client = getOpenAIClient();
+        const modelId = model.replace('openai-', '');
+        const completion = await client.chat.completions.create({
+          model: modelId,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: opts.temperature ?? 0.3,
+          max_tokens: Math.min(opts.maxTokens ?? 4096, 4096),
+        });
+        const text = completion.choices[0]?.message?.content ?? '';
+        if (opts.json) {
+          try {
+            return parseJsonResponse(text);
+          } catch {
+            throw new Error(`AI returned invalid JSON: ${text.slice(0, 300)}`);
+          }
+        }
+        return text;
+
+      // ── Anthropic via @anthropic-ai/sdk SDK ───────────────────────────────
+      } else if (model.startsWith('anthropic')) {
+        const client = getAnthropicClient();
+        const modelId = model.replace('anthropic-', '');
+        const message = await client.messages.create({
+          model: modelId,
+          max_tokens: Math.min(opts.maxTokens ?? 4096, 4096),
+          temperature: opts.temperature ?? 0.3,
+          messages: [{ role: 'user', content: prompt }],
+        });
+        const text = message.content[0]?.text ?? '';
+        if (opts.json) {
+          try {
+            return parseJsonResponse(text);
+          } catch {
+            throw new Error(`AI returned invalid JSON: ${text.slice(0, 300)}`);
+          }
+        }
+        return text;
+
+      } else {
+        throw new Error(`Unsupported model: ${model}`);
+      }
     }
 
+    // Exponential backoff retry loop for rate-limit / quota errors
     const maxRetries = 5;
     let delay = 2000;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        const result = await executeRequest(model, prompt, opts);
-        return result;
+        return await executeRequest();
       } catch (err) {
-        const isRateLimit = err.message.toLowerCase().includes('quota') ||
-          err.message.toLowerCase().includes('429') ||
-          err.message.toLowerCase().includes('rate limit') ||
-          err.message.toLowerCase().includes('limit exceeded') ||
-          err.message.toLowerCase().includes('retry in');
+        const msg = err.message?.toLowerCase() ?? '';
+        const isRateLimit =
+          msg.includes('quota') ||
+          msg.includes('429') ||
+          msg.includes('rate limit') ||
+          msg.includes('limit exceeded') ||
+          msg.includes('retry in') ||
+          err.status === 429;
 
         if (isRateLimit && attempt < maxRetries && !opts.noRetry) {
           console.warn(`Rate limit / Quota exceeded on attempt ${attempt}. Retrying in ${delay}ms...`);
@@ -271,7 +304,7 @@ export const AIEngine = (() => {
 
   /**
    * Verifies connectivity by sending a lightweight test query to the selected AI provider.
-   * 
+   *
    * @returns {Promise<boolean>} True if the connection succeeded, false otherwise.
    */
   async function testConnection() {
@@ -282,7 +315,7 @@ export const AIEngine = (() => {
   /**
    * Groups top-level document headings from multiple contract templates
    * that share a common legal or business topic.
-   * 
+   *
    * @param {Array<Object>} docsWithSections - Document sections payload list.
    * @returns {Promise<Array<Object>>} List of group objects detailing cluster mappings.
    */
@@ -320,7 +353,7 @@ ${JSON.stringify(sectionList, null, 2)}`;
 
   /**
    * Compares multiple versions of a section to assign semantic similarity scores between them.
-   * 
+   *
    * @param {string} groupName - Cleaned canonical section title.
    * @param {Array<Object>} variants - Individual text versions of the section.
    * @returns {Promise<Array<Object>>} Pairwise similarity evaluations.
@@ -349,7 +382,7 @@ ${variants.map((v, i) => `--- Document ${i + 1}: ${v.docName} ---\n${v.content.s
   /**
    * Analyzes section content versions to detect placeholders (Smart Tags),
    * standalone clause candidates (CLIs), and assembly/conditional logic rules.
-   * 
+   *
    * @param {string} groupName - The canonical group name.
    * @param {Array<Object>} variants - Individual text versions of the section.
    * @param {Array<string>} [knownSmartTags=[]] - Existing tags context to prioritize.
@@ -381,7 +414,7 @@ ${variants.map((v, i) => `=== Document ${i + 1}: ${v.docName} ===\n${v.content.s
   /**
    * Merges multiple section versions into a single unified standard clause.
    * Provides variations and notes differences where relevant.
-   * 
+   *
    * @param {string} groupName - Canonical section title.
    * @param {Array<Object>} variants - Text versions of the section.
    * @param {Object} [annotations=null] - Detected variables or placeholders context.

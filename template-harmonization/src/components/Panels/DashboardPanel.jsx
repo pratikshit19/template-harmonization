@@ -16,6 +16,7 @@ export default function DashboardPanel({ setCurrentStep, markStepComplete, unloc
   const {
     files,
     parsedDocs,
+    docsWithSections,
     clauseInventory,
     sectionGroups,
     harmonizedResults,
@@ -206,6 +207,8 @@ export default function DashboardPanel({ setCurrentStep, markStepComplete, unloc
             </table>
           </div>
         </div>
+      </div>
+
       {/* Full-width Excel Tracking Sheet Dynamic Section */}
       <div className="dashboard-card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '24px', marginBottom: '32px' }}>
         <h4 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '8px', color: 'var(--text-primary)' }}>
@@ -255,11 +258,16 @@ export default function DashboardPanel({ setCurrentStep, markStepComplete, unloc
                   </tr>
                 );
               })}
+              {docsWithSections.length === 0 && (
+                <tr>
+                  <td colSpan={4} style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                    No documents processed yet.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
-      </div>
-      
       </div>
 
       <div className="step-actions">

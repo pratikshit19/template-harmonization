@@ -29,9 +29,9 @@ export default function SetupPanel() {
   }, [apiKeyInput]);
 
   const providerMap = {
-    'gemini-2.5-flash': 'gemini',
+    'gemini-2.0-flash': 'gemini',
     'openai-gpt-4o': 'openai',
-    'anthropic-claude-3-opus-20240229': 'anthropic'
+    'anthropic-claude-3-5-sonnet-20241022': 'anthropic'
   };
 
   const provider = providerMap[activeModel] || 'gemini';

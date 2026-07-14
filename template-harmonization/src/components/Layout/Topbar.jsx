@@ -19,9 +19,9 @@ export default function Topbar() {
   } = useHarmonize();
 
   const providerMap = {
-    'gemini-2.5-flash': 'Gemini',
+    'gemini-2.0-flash': 'Gemini',
     'openai-gpt-4o': 'OpenAI',
-    'anthropic-claude-3-opus-20240229': 'Anthropic'
+    'anthropic-claude-3-5-sonnet-20241022': 'Anthropic'
   };
   const providerName = providerMap[activeModel] || 'Gemini';
 
@@ -56,9 +56,9 @@ export default function Topbar() {
           value={activeModel}
           onChange={(e) => changeModel(e.target.value)}
         >
-          <option value="gemini-2.5-flash">Gemini 2.5 Flash (default)</option>
+          <option value="gemini-2.0-flash">Gemini 2.0 Flash (default)</option>
           <option value="openai-gpt-4o">OpenAI GPT‑4o</option>
-          <option value="anthropic-claude-3-opus-20240229">Anthropic Claude‑3 Opus</option>
+          <option value="anthropic-claude-3-5-sonnet-20241022">Anthropic Claude‑3.5 Sonnet</option>
         </select>
         <button
           className="btn-icon"

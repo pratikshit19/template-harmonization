@@ -1,3 +1,4 @@
+/* @refresh reset */
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { AIEngine } from '../services/aiEngine';
 import { Parser } from '../services/parser';
@@ -77,6 +78,7 @@ export const HarmonizeProvider = ({ children }) => {
   const [annotations, setAnnotations] = useState({});
   const [harmonizedResults, setHarmonizedResults] = useState([]);
   const [excelSmartTags, setExcelSmartTags] = useState([]);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
 
   // Setup / Model states
   const [activeModel, setActiveModel] = useState(AIEngine.getModel());
@@ -84,7 +86,7 @@ export const HarmonizeProvider = ({ children }) => {
   const [connectionStatus, setConnectionStatus] = useState('disconnected'); // disconnected, connecting, connected
   const [connectionLabel, setConnectionLabel] = useState('AI not connected');
   const [connectionResult, setConnectionResult] = useState({ text: '', type: '' }); // {text, type: 'success'|'error'}
-  
+
   // Theme state
   const [lightTheme, setLightTheme] = useState(localStorage.getItem('harmonize_light_mode') === 'true');
 
@@ -95,21 +97,113 @@ export const HarmonizeProvider = ({ children }) => {
    */
   const toggleSidebar = () => setSidebarCollapsed(prev => !prev);
 
+  /**
+   * Extracts a clean, human-readable error message from raw API error responses.
+   * The Google/OpenAI/Anthropic SDKs sometimes embed full JSON in err.message.
+   *
+   * @param {Error} err - The caught error object.
+   * @returns {string} A readable error string.
+   */
+  function parseApiError(err) {
+    const raw = err.message || String(err);
+    // Try to parse embedded JSON (e.g. from Gemini SDK)
+    try {
+      const parsed = JSON.parse(raw);
+      const msg = parsed?.error?.message || parsed?.message;
+      if (msg) {
+        // Strip quota violation detail walls — keep only the first sentence
+        const firstLine = msg.split('\n')[0].trim();
+        // Detect quota/rate-limit and give a friendlier label
+        if (parsed?.error?.status === 'RESOURCE_EXHAUSTED' || firstLine.toLowerCase().includes('quota')) {
+          return `Quota exceeded — you've hit the free-tier rate limit. Please wait a few minutes or upgrade your plan.`;
+        }
+        return firstLine;
+      }
+    } catch {
+      // not JSON — fall through
+    }
+    // Non-JSON: detect quota keywords in plain text
+    const lower = raw.toLowerCase();
+    if (lower.includes('quota') || lower.includes('resource_exhausted') || lower.includes('rate limit')) {
+      return `Quota exceeded — you've hit the free-tier rate limit. Please wait a few minutes or upgrade your plan.`;
+    }
+    // Trim to the first sentence / 200 chars max
+    return raw.split('\n')[0].slice(0, 200);
+  }
+
   // Load key on init or when activeModel changes
   useEffect(() => {
+    let isCurrent = true;
     const provider = getProviderFromModel(activeModel);
     const cfg = MODEL_CONFIG[provider];
+
     if (cfg) {
-      setApiKeyInput(cfg.getKey() || '');
-      if (cfg.getKey()) {
-        setConnectionStatus('connected');
-        setConnectionLabel(`${cfg.provider} key saved`);
-        unlockAllSteps();
+      const key = cfg.getKey();
+      setApiKeyInput(key || '');
+      if (key) {
+        if (key === 'mock-key') {
+          setConnectionStatus('connected');
+          setConnectionLabel(`${cfg.provider} (Offline Demo)`);
+          setConnectionResult({ text: '✓ Demo / Offline Mode activated — Steps unlocked', type: 'success' });
+          unlockAllSteps();
+          markStepComplete('setup');
+          return;
+        }
+
+        const isEnvKey = (provider === 'gemini' && !!import.meta.env.VITE_GEMINI_API_KEY) ||
+          (provider === 'openai' && !!import.meta.env.VITE_OPENAI_API_KEY) ||
+          (provider === 'anthropic' && !!import.meta.env.VITE_ANTHROPIC_API_KEY);
+
+        setConnectionStatus('connecting');
+        setConnectionLabel(`Connecting to ${cfg.provider}…`);
+        setConnectionResult({ text: '', type: '' });
+
+        AIEngine.testConnection()
+          .then((success) => {
+            if (!isCurrent) return;
+            if (success) {
+              setConnectionStatus('connected');
+              if (isEnvKey) {
+                setConnectionLabel(`${cfg.provider} connected (.env)`);
+                setConnectionResult({ text: `✓ Connected via .env — ${cfg.provider} API is ready`, type: 'success' });
+              } else {
+                setConnectionLabel(`${cfg.provider} key saved`);
+                setConnectionResult({ text: `✓ Connection successful — ${cfg.provider} API is ready`, type: 'success' });
+              }
+              unlockAllSteps();
+              markStepComplete('setup');
+            } else {
+              throw new Error('Connection verification returned empty response.');
+            }
+          })
+          .catch((err) => {
+            if (!isCurrent) return;
+            setConnectionStatus('disconnected');
+            setConnectionLabel('AI not connected');
+            setConnectionResult({ text: `✕ Connection failed: ${parseApiError(err)}`, type: 'error' });
+            setUnlockedSteps({
+              setup: true,
+              upload: false,
+              inventory: false,
+              extract: false,
+              annotate: false,
+              dashboard: false,
+              export: false
+            });
+            setCompletedSteps(prev => ({
+              ...prev,
+              setup: false
+            }));
+          });
       } else {
         setConnectionStatus('disconnected');
         setConnectionLabel('AI not connected');
+        setConnectionResult({ text: '', type: '' });
       }
     }
+    return () => {
+      isCurrent = false;
+    };
   }, [activeModel]);
 
   // Sync theme to body tag
@@ -190,7 +284,7 @@ export const HarmonizeProvider = ({ children }) => {
       cfg.setKey(key);
       setApiKeyInput(key);
       await AIEngine.testConnection();
-      
+
       setConnectionStatus('connected');
       setConnectionLabel(`${cfg.provider} connected`);
       setConnectionResult({ text: `✓ Connection successful — ${cfg.provider} API is ready`, type: 'success' });
@@ -201,7 +295,20 @@ export const HarmonizeProvider = ({ children }) => {
     } catch (err) {
       setConnectionStatus('disconnected');
       setConnectionLabel('AI not connected');
-      setConnectionResult({ text: `✕ Connection failed: ${err.message}`, type: 'error' });
+      setConnectionResult({ text: `✕ Connection failed: ${parseApiError(err)}`, type: 'error' });
+      setUnlockedSteps({
+        setup: true,
+        upload: false,
+        inventory: false,
+        extract: false,
+        annotate: false,
+        dashboard: false,
+        export: false
+      });
+      setCompletedSteps(prev => ({
+        ...prev,
+        setup: false
+      }));
       throw err;
     }
   };
@@ -285,11 +392,11 @@ export const HarmonizeProvider = ({ children }) => {
   const addFiles = (newFiles) => {
     const supported = newFiles.filter(f => /\.(docx?|xlsx)/i.test(f.name));
     const skipped = newFiles.length - supported.length;
-    
+
     setFiles(prev => {
       const existing = new Set(prev.map(f => f.name));
       const added = supported.filter(f => !existing.has(f.name));
-      
+
       if (added.length > 0) {
         GovernanceLog.log('files_uploaded', {
           count: added.length,
@@ -322,7 +429,8 @@ export const HarmonizeProvider = ({ children }) => {
   const startSectionDetection = async (onProcessingStateChange, onToast) => {
     setCurrentStep('inventory');
     onProcessingStateChange(true);
-    
+    setAnalysisProgress(0);
+
     try {
       const parsed = await Parser.parseAll(files);
       setParsedDocs(parsed);
@@ -374,10 +482,12 @@ export const HarmonizeProvider = ({ children }) => {
         docs: docsSecs.map(d => ({ name: d.name, sections: d.sections.length }))
       });
 
-      // Similarity scoring
+      // Similarity scoring with progress updates
       onToast('AI is comparing sections across all documents…', 'info');
       const multiDocGroups = groups.filter(g => g.sections.length > 1);
+      const totalGroups = multiDocGroups.length;
       const scoresObj = {};
+      let processed = 0;
       for (const group of multiDocGroups) {
         try {
           const variants = group.sections.map(s => ({ docName: s.docName, content: s.content, comments: s.comments }));
@@ -387,8 +497,12 @@ export const HarmonizeProvider = ({ children }) => {
           console.warn(`Similarity scoring failed for "${group.groupName}":`, err);
           scoresObj[group.groupName] = [];
         }
+        processed += 1;
+        const percent = Math.round((processed / totalGroups) * 100);
+        setAnalysisProgress(percent);
       }
       setSimilarityData(scoresObj);
+      setAnalysisProgress(100);
 
       GovernanceLog.log('variance_analysis_complete', {
         groupsScored: Object.keys(scoresObj).length
@@ -479,7 +593,7 @@ export const HarmonizeProvider = ({ children }) => {
           sectionGroups,
           annotations,
           harmonizedResults,
-          (current, total, name) => {}
+          (current, total, name) => { }
         );
         setHarmonizedResults(currentResults);
       }
@@ -529,7 +643,8 @@ export const HarmonizeProvider = ({ children }) => {
       connectionResult,
       lightTheme,
       sidebarCollapsed,
-      
+      analysisProgress,
+
       toggleTheme,
       toggleSidebar,
       setCurrentStep: navigateToStep,
@@ -543,6 +658,7 @@ export const HarmonizeProvider = ({ children }) => {
       addFiles,
       removeFile,
       startSectionDetection,
+      setAnalysisProgress,
       updateHarmonizedResultInline,
       updateAnnotationInline,
       startBulkAnnotations,
