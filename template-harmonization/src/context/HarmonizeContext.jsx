@@ -23,6 +23,11 @@ const MODEL_CONFIG = {
     provider: 'Anthropic',
     getKey: () => AIEngine.getAnthropicKey(),
     setKey: (k) => AIEngine.setAnthropicKey(k),
+  },
+  openrouter: {
+    provider: 'OpenRouter',
+    getKey: () => AIEngine.getOpenRouterKey(),
+    setKey: (k) => AIEngine.setOpenRouterKey(k),
   }
 };
 
@@ -34,6 +39,7 @@ const MODEL_CONFIG = {
  */
 function getProviderFromModel(modelValue) {
   if (!modelValue) return 'gemini';
+  if (modelValue.startsWith('openrouter')) return 'openrouter';
   if (modelValue.startsWith('openai')) return 'openai';
   if (modelValue.startsWith('anthropic')) return 'anthropic';
   return 'gemini';
@@ -152,7 +158,8 @@ export const HarmonizeProvider = ({ children }) => {
 
         const isEnvKey = (provider === 'gemini' && !!import.meta.env.VITE_GEMINI_API_KEY) ||
           (provider === 'openai' && !!import.meta.env.VITE_OPENAI_API_KEY) ||
-          (provider === 'anthropic' && !!import.meta.env.VITE_ANTHROPIC_API_KEY);
+          (provider === 'anthropic' && !!import.meta.env.VITE_ANTHROPIC_API_KEY) ||
+          (provider === 'openrouter' && !!import.meta.env.VITE_OPENROUTER_API_KEY);
 
         setConnectionStatus('connecting');
         setConnectionLabel(`Connecting to ${cfg.provider}…`);

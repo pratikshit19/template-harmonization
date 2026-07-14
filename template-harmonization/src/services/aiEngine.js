@@ -42,11 +42,13 @@ export const AIEngine = (() => {
   let _apiKey = null;
   let _openAiKey = null;
   let _anthropicKey = null;
+  let _openRouterKey = null;
 
   // SDK client instances — lazily created and cached per key
   let _geminiClient = null;
   let _openaiClient = null;
   let _anthropicClient = null;
+  let _openRouterClient = null;
 
   /**
    * Sets the Gemini API key in memory and localStorage, invalidating the cached client.
@@ -79,6 +81,17 @@ export const AIEngine = (() => {
     _anthropicKey = key.trim();
     localStorage.setItem('harmonize_anthropic_key', _anthropicKey);
     _anthropicClient = null; // reset cached client
+  }
+
+  /**
+   * Sets the OpenRouter API key in memory and localStorage, invalidating the cached client.
+   *
+   * @param {string} key - The OpenRouter API key.
+   */
+  function setOpenRouterKey(key) {
+    _openRouterKey = key.trim();
+    localStorage.setItem('harmonize_openrouter_key', _openRouterKey);
+    _openRouterClient = null; // reset cached client
   }
 
   /**
@@ -115,6 +128,18 @@ export const AIEngine = (() => {
       _anthropicKey = import.meta.env.VITE_ANTHROPIC_API_KEY || localStorage.getItem('harmonize_anthropic_key') || null;
     }
     return _anthropicKey;
+  }
+
+  /**
+   * Retrieves the OpenRouter API key from memory, environment variables, or localStorage.
+   *
+   * @returns {string|null} The API key if found, otherwise null.
+   */
+  function getOpenRouterKey() {
+    if (!_openRouterKey) {
+      _openRouterKey = import.meta.env.VITE_OPENROUTER_API_KEY || localStorage.getItem('harmonize_openrouter_key') || null;
+    }
+    return _openRouterKey;
   }
 
   /**
@@ -166,6 +191,29 @@ export const AIEngine = (() => {
       _anthropicClient = new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true });
     }
     return _anthropicClient;
+  }
+
+  /**
+   * Returns (or lazily creates) the OpenRouter SDK client.
+   * Uses the OpenAI SDK with a custom baseURL since OpenRouter is OpenAI-compatible.
+   *
+   * @returns {OpenAI} Configured OpenRouter client.
+   */
+  function getOpenRouterClient() {
+    const key = getOpenRouterKey();
+    if (!key) throw new Error('No OpenRouter API key set. Please enter it in Setup.');
+    if (!_openRouterClient) {
+      _openRouterClient = new OpenAI({
+        apiKey: key,
+        baseURL: 'https://openrouter.ai/api/v1',
+        dangerouslyAllowBrowser: true,
+        defaultHeaders: {
+          'HTTP-Referer': window.location.origin,
+          'X-Title': 'Harmonize - Template Harmonizer'
+        }
+      });
+    }
+    return _openRouterClient;
   }
 
   /**
@@ -260,6 +308,31 @@ export const AIEngine = (() => {
           messages: [{ role: 'user', content: prompt }],
         });
         const text = message.content[0]?.text ?? '';
+        if (opts.json) {
+          try {
+            return parseJsonResponse(text);
+          } catch {
+            throw new Error(`AI returned invalid JSON: ${text.slice(0, 300)}`);
+          }
+        }
+        return text;
+
+      // ── OpenRouter via OpenAI-compatible SDK ──────────────────────────────
+      } else if (model.startsWith('openrouter')) {
+        const client = getOpenRouterClient();
+        const modelId = model.replace('openrouter-', '');
+        const reqBody = {
+          model: modelId,
+          messages: [{ role: 'user', content: prompt }],
+          temperature: opts.temperature ?? 0.3,
+        };
+        // Only send max_tokens if explicitly provided — omitting it lets
+        // OpenRouter auto-cap based on available credits (avoids 402 errors).
+        if (opts.maxTokens) {
+          reqBody.max_tokens = opts.maxTokens;
+        }
+        const completion = await client.chat.completions.create(reqBody);
+        const text = completion.choices[0]?.message?.content ?? '';
         if (opts.json) {
           try {
             return parseJsonResponse(text);
@@ -458,6 +531,7 @@ ${variants.map((v, i) => `=== Version ${i + 1} — ${v.docName} ===\n${v.content
 
   return {
     setKey, getKey, setOpenAiKey, getOpenAiKey, setAnthropicKey, getAnthropicKey,
+    setOpenRouterKey, getOpenRouterKey,
     clearKey, setModel, getModel,
     testConnection, groupSections, scoreSimilarity,
     annotateSection, harmonizeSection,

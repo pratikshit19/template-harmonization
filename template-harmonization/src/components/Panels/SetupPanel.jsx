@@ -34,7 +34,7 @@ export default function SetupPanel() {
     'anthropic-claude-3-5-sonnet-20241022': 'anthropic'
   };
 
-  const provider = providerMap[activeModel] || 'gemini';
+  const provider = providerMap[activeModel] || (activeModel?.startsWith('openrouter') ? 'openrouter' : 'gemini');
 
   const providerConfigs = {
     gemini: {
@@ -51,6 +51,11 @@ export default function SetupPanel() {
       title: 'Anthropic Claude API Key',
       desc: <>Enter your API key from <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer">Anthropic Console</a>. Stored locally in your browser only.</>,
       placeholder: 'sk-ant-...'
+    },
+    openrouter: {
+      title: 'OpenRouter API Key',
+      desc: <>Enter your API key from <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer">OpenRouter Dashboard</a>. Routes to 300+ models via a single key. Stored locally in your browser only.</>,
+      placeholder: 'sk-or-v1-...'
     }
   };
 
