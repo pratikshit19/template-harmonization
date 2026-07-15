@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useHarmonize } from '../../context/HarmonizeContext';
 import { AIEngine } from '../../services/aiEngine';
+import DocumentViewer from '../DocumentViewer';
 
 /**
  * ExtractPanel Component.
@@ -28,7 +29,7 @@ export default function ExtractPanel({ toast }) {
     startBulkAnnotations
   } = useHarmonize();
 
-  const [activeView, setActiveView] = useState('grouped'); // 'grouped' or 'sidebyside'
+  const [activeView, setActiveView] = useState('grouped'); // 'grouped', 'sidebyside', 'documents'
   const [sbsPage, setSbsPage] = useState(0);
   const [loadingSections, setLoadingSections] = useState({}); // { [groupName]: boolean }
 
@@ -162,6 +163,20 @@ export default function ExtractPanel({ toast }) {
                   <rect x="11" y="1" width="4" height="14" rx="1" stroke="currentColor" strokeWidth="1.5" />
                 </svg>
                 Side-by-Side
+              </button>
+              <button
+                className={`view-toggle-btn ${activeView === 'documents' ? 'active' : ''}`}
+                id="btn-documents-view"
+                title="Full document view"
+                onClick={() => setActiveView('documents')}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                  <rect x="3" y="1" width="10" height="14" rx="1" stroke="currentColor" strokeWidth="1.5" />
+                  <line x1="6" y1="5" x2="10" y2="5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                  <line x1="6" y1="8" x2="10" y2="8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                  <line x1="6" y1="11" x2="9" y2="11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                </svg>
+                Documents
               </button>
             </div>
           </div>
@@ -336,6 +351,23 @@ export default function ExtractPanel({ toast }) {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ==========================================
+            VIEW 3: FULL DOCUMENT VIEW
+            ========================================== */}
+        {activeView === 'documents' && (
+          <div className="sbs-viewer-columns" style={{
+            gridTemplateColumns: `repeat(${Math.min(sbsDocs.length, 2)}, 1fr)`
+          }}>
+            {docsWithSections.map(doc => (
+              <DocumentViewer
+                key={doc.name}
+                name={doc.name}
+                html={doc.html || ''}
+              />
+            ))}
           </div>
         )}
 

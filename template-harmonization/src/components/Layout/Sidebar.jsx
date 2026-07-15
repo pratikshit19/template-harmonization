@@ -1,9 +1,12 @@
 import React from 'react';
 import { useHarmonize } from '../../context/HarmonizeContext';
+import sirionLogo from '../../assets/sirionlogoo.png';
+import supabase from '../../services/supabaseClient';
 
 /**
  * Sidebar component that displays the application brand logo, 
  * workflow steps (Setup through Export), and the connection status of the AI models.
+ * Includes a Sign Out button linked to Supabase.
  * 
  * @returns {React.ReactElement} The rendered Sidebar component.
  */
@@ -14,7 +17,9 @@ export default function Sidebar() {
     completedSteps,
     setCurrentStep,
     connectionStatus,
-    connectionLabel
+    connectionLabel,
+    sidebarCollapsed,
+    toggleSidebar
   } = useHarmonize();
 
   const stepsList = [
@@ -28,31 +33,17 @@ export default function Sidebar() {
   ];
 
   return (
-    <aside className="sidebar" id="sidebar">
+    <aside className={`sidebar${sidebarCollapsed ? ' sidebar--collapsed' : ''}`} id="sidebar">
       <div className="sidebar-brand">
-        <div className="brand-icon">
-          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-            <rect x="2" y="2" width="10" height="10" rx="2" fill="url(#g1)" />
-            <rect x="16" y="2" width="10" height="10" rx="2" fill="url(#g2)" opacity="0.7" />
-            <rect x="2" y="16" width="10" height="10" rx="2" fill="url(#g2)" opacity="0.7" />
-            <rect x="16" y="16" width="10" height="10" rx="2" fill="url(#g1)" />
-            <path d="M12 7h4M7 12v4M21 12v4M12 21h4" stroke="white" strokeWidth="1.5" strokeLinecap="round" />
-            <defs>
-              <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#0066CC" />
-                <stop offset="100%" stopColor="#00B4D8" />
-              </linearGradient>
-              <linearGradient id="g2" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stopColor="#00B4D8" />
-                <stop offset="100%" stopColor="#00CFB4" />
-              </linearGradient>
-            </defs>
-          </svg>
+        <div className="brand-icon" onClick={toggleSidebar} style={{ cursor: 'pointer' }} title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+          <img src={sirionLogo} alt="Sirion Logo" style={{ width: '28px', height: '28px' }} />
         </div>
-        <div className="sidebar-brand-text">
-          <span className="brand-name">Harmonize</span>
-          <span className="brand-tagline">by Sirion</span>
-        </div>
+        {!sidebarCollapsed && (
+          <div className="sidebar-brand-text">
+            <span className="brand-name">Harmonize</span>
+            <span className="brand-tagline">by Sirion</span>
+          </div>
+        )}
       </div>
 
       <nav className="sidebar-nav">
@@ -80,21 +71,46 @@ export default function Sidebar() {
                     {isCompleted ? '✓' : step.num}
                   </span>
                 </div>
-                <div className="step-info">
-                  <span className="step-title">{step.title}</span>
-                  <span className="step-desc">{step.desc}</span>
-                </div>
+                {!sidebarCollapsed && (
+                  <div className="step-info">
+                    <span className="step-title">{step.title}</span>
+                    <span className="step-desc">{step.desc}</span>
+                  </div>
+                )}
               </li>
             );
           })}
         </ul>
       </nav>
 
-      <div className="sidebar-footer">
-        <div className="ai-status" id="ai-status">
+      <div className="sidebar-footer" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div className="ai-status" id="ai-status" style={{ width: '100%' }}>
           <div className={`status-dot ${connectionStatus}`} id="status-dot"></div>
-          <span id="status-label">{connectionLabel}</span>
+          {!sidebarCollapsed && <span id="status-label">{connectionLabel}</span>}
         </div>
+        <button
+          onClick={() => supabase.auth.signOut()}
+          className="btn-secondary"
+          style={{
+            width: '100%',
+            padding: sidebarCollapsed ? '8px 0' : '8px 12px',
+            fontSize: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
+            gap: '8px',
+            background: 'rgba(255, 92, 122, 0.05)',
+            border: '1px solid rgba(255, 92, 122, 0.15)',
+            color: 'var(--red)',
+            cursor: 'pointer',
+            borderRadius: 'var(--radius-md)',
+            transition: 'all 0.2s ease',
+          }}
+          title="Sign Out"
+        >
+          <span>🚪</span>
+          {!sidebarCollapsed && <span>Sign Out</span>}
+        </button>
       </div>
     </aside>
   );

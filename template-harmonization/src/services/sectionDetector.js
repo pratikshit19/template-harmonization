@@ -39,6 +39,7 @@ export const SectionDetector = (() => {
         } else if (doc.text) {
           list.push({
             name: doc.name,
+            html: doc.html || '',
             sections: doc.sections || Parser.detectSections(doc.text, doc.html || '')
           });
         }

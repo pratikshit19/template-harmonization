@@ -130,9 +130,53 @@ export const Parser = (() => {
       reader.onload = async (e) => {
         try {
           const arrayBuffer = e.target.result;
+          const mammothOptions = {
+            arrayBuffer,
+            styleMap: [
+              // Preserve heading styles
+              "p[style-name='Heading 1'] => h1:fresh",
+              "p[style-name='Heading 2'] => h2:fresh",
+              "p[style-name='Heading 3'] => h3:fresh",
+              "p[style-name='Heading 4'] => h4:fresh",
+              "p[style-name='Heading 5'] => h5:fresh",
+              "p[style-name='Heading 6'] => h6:fresh",
+              // Title / subtitle styles
+              "p[style-name='Title'] => h1.doc-title:fresh",
+              "p[style-name='Subtitle'] => p.doc-subtitle:fresh",
+              // List styles
+              "p[style-name='List Paragraph'] => li:fresh",
+              "p[style-name='List Bullet']    => li:fresh",
+              "p[style-name='List Number']    => li:fresh",
+              // Character formatting
+              "r[style-name='Strong']        => strong",
+              "r[style-name='Emphasis']      => em",
+              "r[style-name='Intense Quote'] => em.intense-quote",
+              // Highlights → coloured spans
+              "r[highlight='yellow']      => mark.hl-yellow",
+              "r[highlight='green']       => mark.hl-green",
+              "r[highlight='cyan']        => mark.hl-cyan",
+              "r[highlight='magenta']     => mark.hl-magenta",
+              "r[highlight='blue']        => mark.hl-blue",
+              "r[highlight='red']         => mark.hl-red",
+              "r[highlight='darkBlue']    => mark.hl-darkblue",
+              "r[highlight='darkGreen']   => mark.hl-darkgreen",
+              "r[highlight='darkRed']     => mark.hl-darkred",
+              "r[highlight='darkYellow']  => mark.hl-darkyellow",
+              "r[highlight='darkMagenta'] => mark.hl-darkmagenta",
+              "r[highlight='darkCyan']    => mark.hl-darkcyan",
+              "r[highlight='gray']        => mark.hl-gray",
+              "r[highlight='darkGray']    => mark.hl-darkgray",
+              // Bold / italic / underline explicit runs
+              "b => strong",
+              "i => em",
+              "u => u",
+              "strike => s",
+            ],
+            includeDefaultStyleMap: true,
+          };
           const [textResult, htmlResult] = await Promise.all([
             mammoth.extractRawText({ arrayBuffer }),
-            mammoth.convertToHtml({ arrayBuffer })
+            mammoth.convertToHtml(mammothOptions)
           ]);
           
           const sections = detectSections(textResult.value, htmlResult.value);

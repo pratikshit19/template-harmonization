@@ -15,7 +15,6 @@ export default function Topbar() {
     changeModel,
     lightTheme,
     toggleTheme,
-    toggleSidebar
   } = useHarmonize();
 
   const providerMap = {
@@ -78,14 +77,7 @@ export default function Topbar() {
         >
           {lightTheme ? '🌙' : '☀️'}
         </button>
-        <button
-          className="btn-icon"
-          id="sidebar-toggle"
-          title="Toggle sidebar"
-          onClick={toggleSidebar}
-        >
-          ☰
-        </button>
+
       </div>
     </header>
   );

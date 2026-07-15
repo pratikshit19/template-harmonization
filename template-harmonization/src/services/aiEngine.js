@@ -325,12 +325,10 @@ export const AIEngine = (() => {
           model: modelId,
           messages: [{ role: 'user', content: prompt }],
           temperature: opts.temperature ?? 0.3,
+          // Cap output tokens to stay within free-tier credit limits.
+          // OpenRouter defaults to the model's full context (64K+) if omitted.
+          max_tokens: Math.min(opts.maxTokens ?? 1380, 1380),
         };
-        // Only send max_tokens if explicitly provided — omitting it lets
-        // OpenRouter auto-cap based on available credits (avoids 402 errors).
-        if (opts.maxTokens) {
-          reqBody.max_tokens = opts.maxTokens;
-        }
         const completion = await client.chat.completions.create(reqBody);
         const text = completion.choices[0]?.message?.content ?? '';
         if (opts.json) {
