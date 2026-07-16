@@ -336,10 +336,13 @@ export const HarmonizeProvider = ({ children }) => {
   };
 
   const enableDemoMode = () => {
-    const provider = getProviderFromModel(activeModel);
-    const cfg = MODEL_CONFIG[provider];
-    cfg.setKey('mock-key');
+    // Set mock-key for all providers to ensure they all operate in demo mode when switched
+    Object.keys(MODEL_CONFIG).forEach(prov => {
+      MODEL_CONFIG[prov].setKey('mock-key');
+    });
     setApiKeyInput('mock-key');
+    const provider = getProviderFromModel(activeModel);
+    const cfg = MODEL_CONFIG[provider] || MODEL_CONFIG.gemini;
     setConnectionStatus('connected');
     setConnectionLabel(`${cfg.provider} (Offline Demo)`);
     setConnectionResult({ text: '✓ Demo / Offline Mode activated — Steps unlocked', type: 'success' });

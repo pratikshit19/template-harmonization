@@ -32,6 +32,9 @@ export default function ExtractPanel({ toast }) {
   const [activeView, setActiveView] = useState('grouped'); // 'grouped', 'sidebyside', 'documents'
   const [sbsPage, setSbsPage] = useState(0);
   const [loadingSections, setLoadingSections] = useState({}); // { [groupName]: boolean }
+  const [approvedSections, setApprovedSections] = useState({}); // { [groupName]: boolean }
+  const [editingSection, setEditingSection] = useState(null); // groupName being edited
+  const [editDraft, setEditDraft] = useState(''); // draft text for inline editor
 
   /**
    * Escapes general special characters for safe inline HTML rendering context.
@@ -218,6 +221,9 @@ export default function ExtractPanel({ toast }) {
                 const harmResult = harmonizedResults.find(r => r.groupName === group.groupName);
                 const sectionAnn = annotations[group.groupName];
 
+                const isApproved = approvedSections[group.groupName];
+                const isEditing = editingSection === group.groupName;
+
                 return (
                   <GroupedSectionCard
                     key={group.groupName}
@@ -230,7 +236,22 @@ export default function ExtractPanel({ toast }) {
                     isSectionLoading={isSectionLoading}
                     harmResult={harmResult}
                     sectionAnn={sectionAnn}
+                    isApproved={isApproved}
+                    isEditing={isEditing}
+                    editDraft={editDraft}
                     onHarmonizeInline={() => handleHarmonizeInline(group.groupName, group.sections)}
+                    onApprove={() => setApprovedSections(prev => ({ ...prev, [group.groupName]: true }))}
+                    onUnapprove={() => setApprovedSections(prev => ({ ...prev, [group.groupName]: false }))}
+                    onEdit={() => {
+                      setEditingSection(group.groupName);
+                      setEditDraft(harmResult?.standardClause || harmResult?.harmonized || '');
+                    }}
+                    onEditSave={(newText) => {
+                      if (harmResult) harmResult.standardClause = newText;
+                      setEditingSection(null);
+                    }}
+                    onEditCancel={() => setEditingSection(null)}
+                    onEditDraftChange={setEditDraft}
                     shortenDocName={shortenDocName}
                   />
                 );
@@ -309,12 +330,17 @@ export default function ExtractPanel({ toast }) {
                     const harmResult = harmonizedResults.find(r => r.groupName === group.groupName);
                     const isSectionLoading = loadingSections[group.groupName];
 
+                    const isApproved = approvedSections[group.groupName];
+
                     return (
                       <div
-                        className={`sbs-doc-section ${isLowSimilarity ? 'sbs-doc-section-different' : ''} ${harmResult && !harmResult.error ? 'sbs-doc-section-harmonized' : ''}`}
+                        className={`sbs-doc-section ${isLowSimilarity ? 'sbs-doc-section-different' : ''} ${harmResult && !harmResult.error ? 'sbs-doc-section-harmonized' : ''} ${isApproved ? 'sbs-doc-section-approved' : ''}`}
                         key={`harm-col-${group.groupName}-${idx}`}
                       >
-                        <div className="sbs-doc-section-heading">{idx + 1}. {group.groupName}</div>
+                        <div className="sbs-doc-section-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span>{idx + 1}. {group.groupName}</span>
+                          {isApproved && <span className="approved-badge-small">✓ Approved</span>}
+                        </div>
                         {isLowSimilarity ? (
                           <div className="sbs-harm-different">
                             <span className="sbs-harm-different-icon">⚠️</span>
@@ -322,9 +348,47 @@ export default function ExtractPanel({ toast }) {
                             <span className="sbs-harm-different-sub">Separate clauses will be created for each document</span>
                           </div>
                         ) : harmResult && !harmResult.error ? (
-                          <div className="sbs-doc-section-text sbs-harmonized-text">
-                            {harmResult.standardClause || harmResult.harmonized || ''}
-                          </div>
+                          <>
+                            <div className="sbs-doc-section-text sbs-harmonized-text">
+                              {harmResult.standardClause || harmResult.harmonized || ''}
+                            </div>
+                            <div className="sbs-section-action-row">
+                              <button
+                                className="sbs-action-btn sbs-btn-edit"
+                                title="Edit this harmonized text"
+                                onClick={() => {
+                                  setEditingSection(group.groupName);
+                                  setEditDraft(harmResult.standardClause || harmResult.harmonized || '');
+                                }}
+                              >
+                                ✏️ Edit
+                              </button>
+                              <button
+                                className="sbs-action-btn sbs-btn-rerun"
+                                title="Re-run AI harmonization"
+                                onClick={() => handleHarmonizeInline(group.groupName, group.sections)}
+                              >
+                                ↺ Re-run
+                              </button>
+                              {!isApproved ? (
+                                <button
+                                  className="sbs-action-btn sbs-btn-approve"
+                                  title="Approve this harmonized section"
+                                  onClick={() => setApprovedSections(prev => ({ ...prev, [group.groupName]: true }))}
+                                >
+                                  ✓ Approve
+                                </button>
+                              ) : (
+                                <button
+                                  className="sbs-action-btn sbs-btn-unapprove"
+                                  title="Revoke approval"
+                                  onClick={() => setApprovedSections(prev => ({ ...prev, [group.groupName]: false }))}
+                                >
+                                  ✕ Revoke
+                                </button>
+                              )}
+                            </div>
+                          </>
                         ) : (
                           <div className="sbs-harm-pending">
                             {!isSectionLoading ? (
@@ -402,7 +466,16 @@ function GroupedSectionCard({
   isSectionLoading,
   harmResult,
   sectionAnn,
+  isApproved,
+  isEditing,
+  editDraft,
   onHarmonizeInline,
+  onApprove,
+  onUnapprove,
+  onEdit,
+  onEditSave,
+  onEditCancel,
+  onEditDraftChange,
   shortenDocName
 }) {
   const sliderRef = useRef(null);
@@ -535,11 +608,57 @@ function GroupedSectionCard({
         </div>
       )}
 
-      <div className="inline-harmonize-action" style={{ marginTop: '16px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+      <div className="inline-harmonize-action" style={{ marginTop: '16px', display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
         {!isSectionLoading ? (
-          <button className="btn-primary" onClick={onHarmonizeInline}>
-            {harmResult ? 'Re-Harmonize ↺' : 'Harmonize Section'}
-          </button>
+          <>
+            {!harmResult && (
+              <button className="btn-primary" style={{ fontSize: '13px', padding: '8px 18px' }} onClick={onHarmonizeInline}>
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="none" style={{ marginRight: '6px', verticalAlign: 'middle' }}>
+                  <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+                Harmonize Section
+              </button>
+            )}
+            {harmResult && (
+              <>
+                <button
+                  className="grouped-action-btn grouped-btn-edit"
+                  title="Edit this harmonized clause"
+                  onClick={onEdit}
+                  disabled={isEditing}
+                >
+                  ✏️ Edit
+                </button>
+                <button
+                  className="grouped-action-btn grouped-btn-rerun"
+                  title="Re-run AI harmonization"
+                  onClick={onHarmonizeInline}
+                >
+                  ↺ Re-run
+                </button>
+                {!isApproved ? (
+                  <button
+                    className="grouped-action-btn grouped-btn-approve"
+                    title="Approve this section"
+                    onClick={onApprove}
+                  >
+                    ✓ Approve
+                  </button>
+                ) : (
+                  <button
+                    className="grouped-action-btn grouped-btn-unapprove"
+                    title="Revoke approval"
+                    onClick={onUnapprove}
+                  >
+                    ✕ Revoke
+                  </button>
+                )}
+                {isApproved && (
+                  <span className="approved-badge-large">✓ Approved</span>
+                )}
+              </>
+            )}
+          </>
         ) : (
           <div className="inline-spinner" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div className="processing-pulse" style={{ width: '12px', height: '12px', margin: 0 }}></div>
@@ -550,23 +669,62 @@ function GroupedSectionCard({
 
       {harmResult && !isSectionLoading && (
         <div
-          className="inline-results-panel"
+          className={`inline-results-panel ${isApproved ? 'inline-results-approved' : ''}`}
           style={{
             display: 'block',
             marginTop: '20px',
-            background: 'rgba(0,0,0,0.15)',
-            border: '1px solid var(--border)',
+            background: isApproved ? 'rgba(0, 200, 120, 0.05)' : 'rgba(0,0,0,0.15)',
+            border: isApproved ? '1px solid rgba(0, 200, 120, 0.3)' : '1px solid var(--border)',
             borderRadius: 'var(--radius-lg)',
-            padding: '20px'
+            padding: '20px',
+            transition: 'all 0.25s ease'
           }}
         >
           <div style={{ marginBottom: '20px' }}>
-            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--teal)', marginBottom: '8px', borderBottom: '1px solid rgba(0, 180, 216, 0.2)', paddingBottom: '6px' }}>
-              ✦ Standard Clause
+            <div style={{ fontSize: '13px', fontWeight: 700, color: isApproved ? 'var(--green)' : 'var(--teal)', marginBottom: '8px', borderBottom: `1px solid ${isApproved ? 'rgba(0,200,120,0.2)' : 'rgba(0, 180, 216, 0.2)'}`, paddingBottom: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>✦ Standard Clause</span>
+              {isApproved && <span style={{ fontSize: '11px', background: 'rgba(0,200,120,0.15)', color: 'var(--green)', padding: '2px 10px', borderRadius: '99px', fontWeight: 600 }}>✓ Approved</span>}
             </div>
-            <div className="hs-merged-content" style={{ fontSize: '13px', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
-              {harmResult.standardClause || harmResult.harmonized || ''}
-            </div>
+            {isEditing ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <textarea
+                  value={editDraft}
+                  onChange={e => onEditDraftChange(e.target.value)}
+                  rows={8}
+                  style={{
+                    width: '100%',
+                    background: 'var(--bg-card)',
+                    color: 'var(--text-primary)',
+                    border: '1px solid var(--cyan)',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '12px',
+                    fontSize: '13px',
+                    lineHeight: 1.6,
+                    resize: 'vertical',
+                    fontFamily: 'inherit',
+                    boxSizing: 'border-box'
+                  }}
+                />
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    className="grouped-action-btn grouped-btn-approve"
+                    onClick={() => onEditSave(editDraft)}
+                  >
+                    💾 Save
+                  </button>
+                  <button
+                    className="grouped-action-btn grouped-btn-edit"
+                    onClick={onEditCancel}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="hs-merged-content" style={{ fontSize: '13px', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
+                {harmResult.standardClause || harmResult.harmonized || ''}
+              </div>
+            )}
           </div>
 
           {harmResult.variations && harmResult.variations.length > 0 && (

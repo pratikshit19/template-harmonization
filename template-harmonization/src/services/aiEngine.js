@@ -257,6 +257,46 @@ export const AIEngine = (() => {
     const model = getModel();
     if (!model) throw new Error('No model selected.');
 
+    // ── Demo / Offline Mode guard ─────────────────────────────────────────────
+    // When the stored key is 'mock-key' (demo mode), skip all real API calls
+    // and return plausible stub data so the workflow can proceed without a 401.
+    let activeKey = null;
+    if (model.startsWith('gemini')) {
+      activeKey = getKey();
+    } else if (model.startsWith('openai')) {
+      activeKey = getOpenAiKey();
+    } else if (model.startsWith('anthropic')) {
+      activeKey = getAnthropicKey();
+    } else if (model.startsWith('openrouter')) {
+      activeKey = getOpenRouterKey();
+    }
+
+    if (activeKey === 'mock-key') {
+      if (opts.json) {
+        // Return minimal valid JSON depending on what the prompt is asking for
+        const promptLower = prompt.toLowerCase();
+        if (promptLower.includes('group') && promptLower.includes('section')) {
+          return [];  // groupSections → empty array is safe
+        }
+        if (promptLower.includes('similarity') || promptLower.includes('score')) {
+          return [];  // scoreSimilarity → empty array
+        }
+        if (promptLower.includes('smart tag') || promptLower.includes('annotate') || promptLower.includes('cli')) {
+          return { smartTags: [], cliCandidates: [], assemblyLogic: [] };
+        }
+        if (promptLower.includes('harmonize') || promptLower.includes('standard clause')) {
+          return {
+            similarityLevel: 'high',
+            standardClause: '[Demo Mode] This is a placeholder harmonized clause. Connect a real API key to generate actual content.',
+            variations: [],
+            rationale: 'Demo mode active — no AI call was made.'
+          };
+        }
+        return {};
+      }
+      return '[Demo Mode] Connect a real API key to get actual AI responses.';
+    }
+
     /**
      * Performs the actual SDK call for the active model.
      *
