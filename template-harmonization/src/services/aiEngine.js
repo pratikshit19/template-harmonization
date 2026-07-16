@@ -4,7 +4,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { GovernanceLog } from './governance';
 
 export const AIEngine = (() => {
-  const DEFAULT_MODEL = 'gemini-2.0-flash';
+  const DEFAULT_MODEL = 'gemini-3.5-flash';
 
   const RETIRED_MODELS = [
     'gemini-2.5-flash',          // deprecated for new users — use gemini-2.0-flash
@@ -275,6 +275,7 @@ export const AIEngine = (() => {
             maxOutputTokens: opts.maxTokens ?? 8192,
           },
         });
+        console.log(response)
         const text = response.text ?? '';
         if (opts.json) {
           try {
@@ -285,7 +286,7 @@ export const AIEngine = (() => {
         }
         return text;
 
-      // ── OpenAI via openai SDK ─────────────────────────────────────────────
+        // ── OpenAI via openai SDK ─────────────────────────────────────────────
       } else if (model.startsWith('openai')) {
         const client = getOpenAIClient();
         const modelId = model.replace('openai-', '');
@@ -305,7 +306,7 @@ export const AIEngine = (() => {
         }
         return text;
 
-      // ── Anthropic via @anthropic-ai/sdk SDK ───────────────────────────────
+        // ── Anthropic via @anthropic-ai/sdk SDK ───────────────────────────────
       } else if (model.startsWith('anthropic')) {
         const client = getAnthropicClient();
         const modelId = model.replace('anthropic-', '');
@@ -325,7 +326,7 @@ export const AIEngine = (() => {
         }
         return text;
 
-      // ── OpenRouter via OpenAI-compatible SDK ──────────────────────────────
+        // ── OpenRouter via OpenAI-compatible SDK ──────────────────────────────
       } else if (model.startsWith('openrouter')) {
         const client = getOpenRouterClient();
         const modelId = model.replace('openrouter-', '');

@@ -30,7 +30,7 @@ export default function SetupPanel() {
   }, [apiKeyInput]);
 
   const providerMap = {
-    'gemini-2.0-flash': 'gemini',
+    'gemini-3.5-flash': 'gemini',
     'openai-gpt-4o': 'openai',
     'anthropic-claude-3-5-sonnet-20241022': 'anthropic'
   };
@@ -173,7 +173,7 @@ export default function SetupPanel() {
             <h3 style={{ fontSize: '20px', fontWeight: 700 }}>Harmonization Approach</h3>
           </div>
         </div>
-        
+
         <div className="how-it-works" style={{ display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '14px', lineHeight: 1.6 }}>
           <div className="how-step-hinglish">
             <div style={{ fontWeight: 600, color: 'var(--cyan)' }}>1. Inventory Create Karein</div>
@@ -182,7 +182,7 @@ export default function SetupPanel() {
               <li>Template name, purpose, owner, aur usage frequency note karein.</li>
             </ul>
           </div>
-          
+
           <div className="how-step-hinglish">
             <div style={{ fontWeight: 600, color: 'var(--cyan)' }}>2. Compare Content</div>
             <ul style={{ paddingLeft: '20px', margin: '4px 0 8px 0', listStyleType: 'disc' }}>

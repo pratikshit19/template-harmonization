@@ -18,7 +18,7 @@ export default function Topbar() {
   } = useHarmonize();
 
   const providerMap = {
-    'gemini-2.0-flash': 'Gemini',
+    'gemini-3.5-flash': 'Gemini',
     'openai-gpt-4o': 'OpenAI',
     'anthropic-claude-3-5-sonnet-20241022': 'Anthropic',
     'openrouter-google/gemini-2.5-flash': 'OpenRouter',
@@ -59,7 +59,7 @@ export default function Topbar() {
           value={activeModel}
           onChange={(e) => changeModel(e.target.value)}
         >
-          <option value="gemini-2.0-flash">Gemini 2.0 Flash (default)</option>
+          <option value="gemini-3.5-flash">Gemini 3.5 Flash (default)</option>
           <option value="openai-gpt-4o">OpenAI GPT‑4o</option>
           <option value="anthropic-claude-3-5-sonnet-20241022">Anthropic Claude‑3.5 Sonnet</option>
           <optgroup label="OpenRouter">
