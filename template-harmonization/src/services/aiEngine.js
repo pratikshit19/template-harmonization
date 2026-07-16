@@ -101,7 +101,7 @@ export const AIEngine = (() => {
    */
   function getKey() {
     if (!_apiKey) {
-      _apiKey = import.meta.env.VITE_GEMINI_API_KEY || localStorage.getItem('harmonize_gemini_key') || null;
+      _apiKey = localStorage.getItem('harmonize_gemini_key') || import.meta.env.VITE_GEMINI_API_KEY || null;
     }
     return _apiKey;
   }
@@ -113,7 +113,7 @@ export const AIEngine = (() => {
    */
   function getOpenAiKey() {
     if (!_openAiKey) {
-      _openAiKey = import.meta.env.VITE_OPENAI_API_KEY || localStorage.getItem('harmonize_openai_key') || null;
+      _openAiKey = localStorage.getItem('harmonize_openai_key') || import.meta.env.VITE_OPENAI_API_KEY || null;
     }
     return _openAiKey;
   }
@@ -125,7 +125,7 @@ export const AIEngine = (() => {
    */
   function getAnthropicKey() {
     if (!_anthropicKey) {
-      _anthropicKey = import.meta.env.VITE_ANTHROPIC_API_KEY || localStorage.getItem('harmonize_anthropic_key') || null;
+      _anthropicKey = localStorage.getItem('harmonize_anthropic_key') || import.meta.env.VITE_ANTHROPIC_API_KEY || null;
     }
     return _anthropicKey;
   }
@@ -174,7 +174,11 @@ export const AIEngine = (() => {
     const key = getOpenAiKey();
     if (!key) throw new Error('No OpenAI API key set. Please enter it in Setup.');
     if (!_openaiClient) {
-      _openaiClient = new OpenAI({ apiKey: key, dangerouslyAllowBrowser: true });
+      _openaiClient = new OpenAI({
+        apiKey: key,
+        baseURL: window.location.origin + '/api/openai',
+        dangerouslyAllowBrowser: true
+      });
     }
     return _openaiClient;
   }
@@ -188,7 +192,11 @@ export const AIEngine = (() => {
     const key = getAnthropicKey();
     if (!key) throw new Error('No Anthropic API key set. Please enter it in Setup.');
     if (!_anthropicClient) {
-      _anthropicClient = new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true });
+      _anthropicClient = new Anthropic({
+        apiKey: key,
+        baseURL: window.location.origin + '/api/anthropic',
+        dangerouslyAllowBrowser: true
+      });
     }
     return _anthropicClient;
   }

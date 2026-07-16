@@ -117,24 +117,13 @@ export const HarmonizeProvider = ({ children }) => {
       const parsed = JSON.parse(raw);
       const msg = parsed?.error?.message || parsed?.message;
       if (msg) {
-        // Strip quota violation detail walls — keep only the first sentence
-        const firstLine = msg.split('\n')[0].trim();
-        // Detect quota/rate-limit and give a friendlier label
-        if (parsed?.error?.status === 'RESOURCE_EXHAUSTED' || firstLine.toLowerCase().includes('quota')) {
-          return `Quota exceeded — you've hit the free-tier rate limit. Please wait a few minutes or upgrade your plan.`;
-        }
-        return firstLine;
+        return msg.split('\n')[0].trim();
       }
     } catch {
       // not JSON — fall through
     }
-    // Non-JSON: detect quota keywords in plain text
-    const lower = raw.toLowerCase();
-    if (lower.includes('quota') || lower.includes('resource_exhausted') || lower.includes('rate limit')) {
-      return `Quota exceeded — you've hit the free-tier rate limit. Please wait a few minutes or upgrade your plan.`;
-    }
     // Trim to the first sentence / 200 chars max
-    return raw.split('\n')[0].slice(0, 200);
+    return raw.split('\n')[0].slice(0, 200).trim();
   }
 
   // Load key on init or when activeModel changes
@@ -282,6 +271,18 @@ export const HarmonizeProvider = ({ children }) => {
     const provider = getProviderFromModel(activeModel);
     const cfg = MODEL_CONFIG[provider];
     if (!key) throw new Error(`Please enter your ${cfg.provider} API key`);
+
+    if (key === 'mock-key') {
+      cfg.setKey(key);
+      setApiKeyInput(key);
+      setConnectionStatus('connected');
+      setConnectionLabel(`${cfg.provider} (Offline Demo)`);
+      setConnectionResult({ text: '✓ Demo / Offline Mode activated — Steps unlocked', type: 'success' });
+      unlockAllSteps();
+      markStepComplete('setup');
+      GovernanceLog.log('api_key_set_offline', { provider: cfg.provider, timestamp: new Date().toISOString() });
+      return true;
+    }
 
     setConnectionStatus('connecting');
     setConnectionLabel(`Connecting to ${cfg.provider}…`);

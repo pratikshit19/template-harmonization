@@ -16,7 +16,8 @@ export default function SetupPanel() {
     connectionLabel,
     connectionResult,
     saveAndTestKey,
-    clearSavedKey
+    clearSavedKey,
+    enableDemoMode
   } = useHarmonize();
 
   const [inputVal, setInputVal] = useState(apiKeyInput);
@@ -129,7 +130,7 @@ export default function SetupPanel() {
             👁
           </button>
         </div>
-        <div className="api-key-actions">
+        <div className="api-key-actions" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <button
             className="btn-primary"
             id="btn-save-key"
@@ -137,6 +138,15 @@ export default function SetupPanel() {
             disabled={isTesting}
           >
             {isTesting ? 'Testing…' : 'Save & Test Connection'}
+          </button>
+          <button
+            className="btn-ghost"
+            style={{ border: '1px solid var(--border)', background: 'var(--bg-card)' }}
+            id="btn-demo-mode"
+            onClick={enableDemoMode}
+            disabled={isTesting}
+          >
+            Use Offline Demo
           </button>
           <button
             className="btn-ghost"
