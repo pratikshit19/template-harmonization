@@ -175,77 +175,77 @@ export default function SetupPanel() {
         </div>
 
         <div className="how-it-works" style={{ display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '14px', lineHeight: 1.6 }}>
-          <div className="how-step-hinglish">
-            <div style={{ fontWeight: 600, color: 'var(--cyan)' }}>1. Inventory Create Karein</div>
+          <div className="how-step-english">
+            <div style={{ fontWeight: 600, color: 'var(--cyan)' }}>1. Create an Inventory</div>
             <ul style={{ paddingLeft: '20px', margin: '4px 0 8px 0', listStyleType: 'disc' }}>
-              <li>Sabhi templates ki list banayein.</li>
-              <li>Template name, purpose, owner, aur usage frequency note karein.</li>
+              <li>Create a comprehensive list of all active templates.</li>
+              <li>Note down each template's name, purpose, owner, and frequency of use.</li>
             </ul>
           </div>
 
-          <div className="how-step-hinglish">
+          <div className="how-step-english">
             <div style={{ fontWeight: 600, color: 'var(--cyan)' }}>2. Compare Content</div>
             <ul style={{ paddingLeft: '20px', margin: '4px 0 8px 0', listStyleType: 'disc' }}>
-              <li>Common sections/clauses identify karein.</li>
-              <li>Unique sections ko alag mark karein.</li>
-              <li>Duplicate content ko highlight karein.</li>
+              <li>Identify common sections and clauses.</li>
+              <li>Separate and mark unique sections.</li>
+              <li>Highlight and flag duplicate content.</li>
             </ul>
           </div>
 
-          <div className="how-step-hinglish">
+          <div className="how-step-english">
             <div style={{ fontWeight: 600, color: 'var(--cyan)' }}>3. Categorize Differences</div>
             <ul style={{ paddingLeft: '20px', margin: '4px 0 8px 0', listStyleType: 'disc' }}>
-              <li>Mandatory content</li>
-              <li>Optional content</li>
-              <li>Country/region-specific content</li>
-              <li>Business-unit-specific content</li>
+              <li>Mandatory core content</li>
+              <li>Optional/negotiable content</li>
+              <li>Country or region-specific content</li>
+              <li>Business unit-specific content</li>
             </ul>
           </div>
 
-          <div className="how-step-hinglish">
+          <div className="how-step-english">
             <div style={{ fontWeight: 600, color: 'var(--cyan)' }}>4. Create a Master Template</div>
             <ul style={{ paddingLeft: '20px', margin: '4px 0 8px 0', listStyleType: 'disc' }}>
-              <li>Common content ko base template me rakhein.</li>
-              <li>Variations ke liye placeholders, conditional clauses, ya content controls use karein.</li>
+              <li>Keep all common content in the base template.</li>
+              <li>Manage differences using placeholders, conditional clauses, or content controls.</li>
             </ul>
           </div>
 
-          <div className="how-step-hinglish">
+          <div className="how-step-english">
             <div style={{ fontWeight: 600, color: 'var(--cyan)' }}>5. Standardize Language</div>
             <ul style={{ paddingLeft: '20px', margin: '4px 0 8px 0', listStyleType: 'disc' }}>
-              <li>Similar clauses me consistent wording use karein.</li>
-              <li>Duplicate clauses me best/latest approved version select karein.</li>
+              <li>Apply consistent phrasing and terminology across similar clauses.</li>
+              <li>Select the best or latest approved version when resolving duplicate clauses.</li>
             </ul>
           </div>
 
-          <div className="how-step-hinglish">
+          <div className="how-step-english">
             <div style={{ fontWeight: 600, color: 'var(--cyan)' }}>6. Stakeholder Review</div>
             <ul style={{ paddingLeft: '20px', margin: '4px 0 8px 0', listStyleType: 'disc' }}>
-              <li>Legal, business, compliance, aur template owners se review karwayein.</li>
-              <li>Confirm karein ki koi critical variation miss na ho.</li>
+              <li>Gather feedback from legal, business, compliance, and template owners.</li>
+              <li>Ensure no critical business-required variations are missed.</li>
             </ul>
           </div>
 
-          <div className="how-step-hinglish">
+          <div className="how-step-english">
             <div style={{ fontWeight: 600, color: 'var(--cyan)' }}>7. Retire Redundant Templates</div>
             <ul style={{ paddingLeft: '20px', margin: '4px 0 8px 0', listStyleType: 'disc' }}>
-              <li>Harmonized template approve hone ke baad duplicate templates remove ya archive kar dein.</li>
+              <li>Once the master template is approved, archive or retire the old duplicate files.</li>
             </ul>
           </div>
 
           <div className="practical-example-box" style={{ background: 'rgba(0, 102, 204, 0.08)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid rgba(0, 102, 204, 0.2)', marginTop: '8px' }}>
             <div style={{ fontWeight: 700, color: 'var(--teal)', marginBottom: '8px' }}>Practical Example</div>
-            <div style={{ marginBottom: '8px' }}>Agar 20 templates me:</div>
+            <div style={{ marginBottom: '8px' }}>If you have 20 templates:</div>
             <ul style={{ paddingLeft: '20px', listStyleType: 'circle' }}>
-              <li>80% content same hai</li>
-              <li>20% content alag hai</li>
+              <li>80% of the content is identical</li>
+              <li>20% of the content is unique or varies</li>
             </ul>
-            <div style={{ margin: '8px 0' }}>To:</div>
+            <div style={{ margin: '8px 0' }}>Then:</div>
             <ul style={{ paddingLeft: '20px', listStyleType: 'circle' }}>
-              <li>80% ko master template me rakhein.</li>
-              <li>20% differences ko conditions/placeholders ke through manage karein.</li>
+              <li>Place the 80% identical content in the master template.</li>
+              <li>Use conditions and placeholders to control and inject the 20% variation.</li>
             </ul>
-            <div style={{ marginTop: '8px', fontWeight: 600 }}>Result: 20 templates &rarr; 1 master template + conditional sections.</div>
+            <div style={{ marginTop: '8px', fontWeight: 600 }}>Result: 20 templates simplified into 1 master template with conditional sections.</div>
           </div>
 
           <div className="excel-example-box" style={{ marginTop: '12px' }}>
