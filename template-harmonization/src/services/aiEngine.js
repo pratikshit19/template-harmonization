@@ -226,17 +226,42 @@ export const AIEngine = (() => {
 
   /**
    * Strips markdown code fences from an AI text response and parses it as JSON.
+   * If the response is truncated (token limit hit), attempts to auto-close the
+   * dangling JSON structure before parsing so the app doesn't hard-fail.
    *
    * @param {string} text - Raw text from the model.
-   * @returns {Object} Parsed JSON object.
+   * @returns {Object} Parsed JSON object (may be partial if truncated).
    */
   function parseJsonResponse(text) {
-    const cleaned = text
+    let cleaned = text
       .replace(/^```json\s*/i, '')
       .replace(/^```\s*/i, '')
       .replace(/\s*```$/i, '')
       .trim();
-    return JSON.parse(cleaned);
+
+    // First try: straight parse
+    try {
+      return JSON.parse(cleaned);
+    } catch (_) {
+      // Second try: auto-close truncated JSON by balancing braces/brackets
+      try {
+        let fixed = cleaned;
+        // Remove trailing incomplete key-value pair (e.g. , "key": "unfinished)
+        fixed = fixed.replace(/,?\s*"[^"]*"\s*:\s*"[^"]*$/, '');
+        fixed = fixed.replace(/,?\s*"[^"]*"\s*:\s*$/, '');
+        fixed = fixed.replace(/,\s*$/, ''); // trailing comma
+
+        // Count unclosed braces/brackets and close them
+        const opens = (fixed.match(/{/g) || []).length - (fixed.match(/}/g) || []).length;
+        const arrOpens = (fixed.match(/\[/g) || []).length - (fixed.match(/\]/g) || []).length;
+        for (let i = 0; i < arrOpens; i++) fixed += ']';
+        for (let i = 0; i < opens; i++) fixed += '}';
+
+        return JSON.parse(fixed);
+      } catch (e2) {
+        throw new Error(`Unparseable JSON (likely truncated by token limit): ${cleaned.slice(0, 200)}`);
+      }
+    }
   }
 
   /**
@@ -320,8 +345,9 @@ export const AIEngine = (() => {
         if (opts.json) {
           try {
             return parseJsonResponse(text);
-          } catch {
-            throw new Error(`AI returned invalid JSON: ${text.slice(0, 300)}`);
+          } catch (e) {
+            console.warn('JSON parse failed (Gemini), returning null:', e.message);
+            return null;
           }
         }
         return text;
@@ -340,8 +366,9 @@ export const AIEngine = (() => {
         if (opts.json) {
           try {
             return parseJsonResponse(text);
-          } catch {
-            throw new Error(`AI returned invalid JSON: ${text.slice(0, 300)}`);
+          } catch (e) {
+            console.warn('JSON parse failed (OpenAI), returning null:', e.message);
+            return null;
           }
         }
         return text;
@@ -360,8 +387,9 @@ export const AIEngine = (() => {
         if (opts.json) {
           try {
             return parseJsonResponse(text);
-          } catch {
-            throw new Error(`AI returned invalid JSON: ${text.slice(0, 300)}`);
+          } catch (e) {
+            console.warn('JSON parse failed (Anthropic), returning null:', e.message);
+            return null;
           }
         }
         return text;
@@ -375,16 +403,17 @@ export const AIEngine = (() => {
           messages: [{ role: 'user', content: prompt }],
           temperature: opts.temperature ?? 0.3,
           // Cap output tokens to stay within free-tier credit limits.
-          // OpenRouter defaults to the model's full context (64K+) if omitted.
-          max_tokens: Math.min(opts.maxTokens ?? 1380, 1380),
+          // Hard cap at 370 — safely within the account's available credit balance.
+          max_tokens: Math.min(opts.maxTokens ?? 370, 370),
         };
         const completion = await client.chat.completions.create(reqBody);
         const text = completion.choices[0]?.message?.content ?? '';
         if (opts.json) {
           try {
             return parseJsonResponse(text);
-          } catch {
-            throw new Error(`AI returned invalid JSON: ${text.slice(0, 300)}`);
+          } catch (e) {
+            console.warn('JSON parse failed (OpenRouter), returning null:', e.message);
+            return null;
           }
         }
         return text;
@@ -557,7 +586,7 @@ Return ONLY this JSON object:
 
 ${variants.map((v, i) => `=== Version ${i + 1} — ${v.docName} ===\n${v.content.slice(0, 1500)}`).join('\n\n')}`;
 
-    const result = await callModel(prompt, { json: true, temperature: 0.2, maxTokens: 6144 });
+    const result = await callModel(prompt, { json: true, temperature: 0.2, maxTokens: 370 });
 
     if (!result) {
       return {

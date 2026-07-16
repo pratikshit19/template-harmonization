@@ -26,7 +26,7 @@ export default function Sidebar() {
     { id: 'setup', num: '⚙', title: 'Setup', desc: 'API key & config' },
     { id: 'upload', num: '1', title: 'Upload Documents', desc: 'Import client DOCX/XLSX files' },
     { id: 'inventory', num: '2', title: 'Clause Inventory', desc: 'Decomposed clauses & traceability' },
-    { id: 'extract', num: '3', title: 'Section Harmonisation', desc: 'Side-by-side comparison & grouping' },
+    { id: 'extract', num: '3', title: 'Section Harmonization', desc: 'Side-by-side comparison & grouping' },
     { id: 'annotate', num: '4', title: 'Annotation & Assembly', desc: 'Smart tags, CLIs & logic' },
     { id: 'dashboard', num: '5', title: 'Consolidation Dashboard', desc: 'KPIs & recommended architecture' },
     { id: 'export', num: '6', title: 'Export Deliverables', desc: 'Download configurations & reports' },

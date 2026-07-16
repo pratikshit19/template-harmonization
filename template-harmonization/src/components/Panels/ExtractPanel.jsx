@@ -136,7 +136,7 @@ export default function ExtractPanel({ toast }) {
         <div className="results-header">
           <div className="results-header-top">
             <div>
-              <h3>Section Detection &amp; Harmonisation Analysis</h3>
+              <h3>Section Detection &amp; Harmonization Analysis</h3>
               <p id="extract-summary-text">
                 Found {sectionGroups.length} section groups across {files.length} documents. Compare original document sections side-by-side. Click 'Harmonize Section' under any group to generate master language inline.
               </p>
@@ -194,7 +194,7 @@ export default function ExtractPanel({ toast }) {
               {sectionGroups.map((group, index) => {
                 const scores = similarityData[group.groupName] || [];
                 const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
-                
+
                 let simLabel = 'Unique Clause';
                 let simClass = 'sim-badge-blue';
 

@@ -35,6 +35,7 @@ export default function SetupPanel() {
     'anthropic-claude-3-5-sonnet-20241022': 'anthropic'
   };
 
+
   const provider = providerMap[activeModel] || (activeModel?.startsWith('openrouter') ? 'openrouter' : 'gemini');
 
   const providerConfigs = {
