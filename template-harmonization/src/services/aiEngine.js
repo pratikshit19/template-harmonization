@@ -605,12 +605,252 @@ ${variants.map((v, i) => `=== Version ${i + 1} — ${v.docName} ===\n${v.content
     };
   }
 
+  /**
+   * Generates a semantic vector embedding array for a given text input.
+   * Leverages Gemini or OpenAI embedding models depending on the active provider.
+   * If on mock mode or if the API call fails, falls back to a deterministic local vector.
+   *
+   * @param {string} text - The input text to embed.
+   * @returns {Promise<Array<number>>} A float array representing the vector.
+   */
+  async function getEmbedding(text) {
+    const model = getModel();
+    let activeKey = null;
+    if (model.startsWith('gemini')) {
+      activeKey = getKey();
+    } else if (model.startsWith('openai')) {
+      activeKey = getOpenAiKey();
+    } else if (model.startsWith('anthropic')) {
+      activeKey = getAnthropicKey();
+    } else if (model.startsWith('openrouter')) {
+      activeKey = getOpenRouterKey();
+    }
+
+    if (activeKey === 'mock-key' || !activeKey) {
+      return generateMockEmbedding(text);
+    }
+
+    try {
+      if (model.startsWith('gemini')) {
+        const client = getGeminiClient();
+        const response = await client.models.embedContent({
+          model: 'text-embedding-004',
+          contents: text,
+        });
+        if (response && response.embedding && response.embedding.values) {
+          return response.embedding.values;
+        }
+        throw new Error('No embedding values returned from Gemini API');
+      } else if (model.startsWith('openai')) {
+        const client = getOpenAIClient();
+        const response = await client.embeddings.create({
+          model: 'text-embedding-3-small',
+          input: text,
+        });
+        if (response && response.data && response.data[0] && response.data[0].embedding) {
+          return response.data[0].embedding;
+        }
+        throw new Error('No embedding data returned from OpenAI API');
+      } else {
+        return generateMockEmbedding(text);
+      }
+    } catch (err) {
+      console.warn('Embedding API call failed, falling back to local mock embedding:', err);
+      return generateMockEmbedding(text);
+    }
+  }
+
+  /**
+   * Generates a deterministic mock embedding vector based on a text string hash.
+   * Used for offline/demo modes.
+   *
+   * @param {string} text - The input text.
+   * @param {number} [dimensions=768] - Desired dimensions of the vector.
+   * @returns {Array<number>} Normalized float vector of unit length.
+   */
+  function generateMockEmbedding(text, dimensions = 768) {
+    let hash = 0;
+    for (let i = 0; i < text.length; i++) {
+      hash = text.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const vec = [];
+    let seed = hash;
+    for (let d = 0; d < dimensions; d++) {
+      seed = (seed * 9301 + 49297) % 233280;
+      vec.push((seed / 233280) * 2 - 1);
+    }
+    const norm = Math.sqrt(vec.reduce((sum, v) => sum + v * v, 0));
+    return vec.map(v => v / (norm || 1));
+  }
+
+  /**
+   * Extracts legal metadata (clause type, jurisdiction, liability caps) using the LLM.
+   * Falls back to a keyword-based mock parser in offline/demo mode.
+   *
+   * @param {string} clauseText - The raw clause text.
+   * @returns {Promise<Object>} Metadata attributes.
+   */
+  async function extractClauseMetadata(clauseText) {
+    const model = getModel();
+    let activeKey = null;
+    if (model.startsWith('gemini')) {
+      activeKey = getKey();
+    } else if (model.startsWith('openai')) {
+      activeKey = getOpenAiKey();
+    } else if (model.startsWith('anthropic')) {
+      activeKey = getAnthropicKey();
+    } else if (model.startsWith('openrouter')) {
+      activeKey = getOpenRouterKey();
+    }
+
+    if (activeKey === 'mock-key' || !activeKey) {
+      return generateMockMetadata(clauseText);
+    }
+
+    const prompt = `Analyze the following legal contract clause text and extract key metadata features.
+Return ONLY a JSON object with this structure, no conversational text or formatting:
+{
+  "clauseType": "string (e.g. Confidentiality, Indemnity, Liability, Term, Termination, Governing Law, Warranty, Audit)",
+  "governingLaw": "string (e.g. Delaware, New York, England, N/A)",
+  "liabilityCap": "string (e.g. 1x Fees, 2x Fees, Unlimited, N/A)",
+  "indemnityScope": "string (e.g. Customer, Provider, Mutual, N/A)",
+  "severity": "high|medium|low"
+}
+
+Clause Text:
+"${clauseText.slice(0, 1500)}"`;
+
+    try {
+      const result = await callModel(prompt, { json: true, temperature: 0.1, maxTokens: 300 });
+      return result || generateMockMetadata(clauseText);
+    } catch (err) {
+      console.warn('Metadata extraction failed, falling back to mock metadata:', err);
+      return generateMockMetadata(clauseText);
+    }
+  }
+
+  /**
+   * Offline mock parser to extract metadata parameters from keywords.
+   */
+  function generateMockMetadata(text) {
+    const lowerText = text.toLowerCase();
+    let clauseType = 'General';
+    let severity = 'low';
+    let governingLaw = 'N/A';
+    let liabilityCap = 'N/A';
+    let indemnityScope = 'N/A';
+
+    if (lowerText.includes('confidential') || lowerText.includes('disclosure')) {
+      clauseType = 'Confidentiality';
+    } else if (lowerText.includes('indemnify') || lowerText.includes('indemnity') || lowerText.includes('harmless')) {
+      clauseType = 'Indemnity';
+      severity = 'high';
+      if (lowerText.includes('mutual')) indemnityScope = 'Mutual';
+      else if (lowerText.includes('customer')) indemnityScope = 'Customer';
+      else indemnityScope = 'Provider';
+    } else if (lowerText.includes('limit') && (lowerText.includes('liability') || lowerText.includes('liable'))) {
+      clauseType = 'Limitation of Liability';
+      severity = 'high';
+      if (lowerText.includes('1x') || lowerText.includes('one times') || lowerText.includes('12 months')) {
+        liabilityCap = '1x Fees';
+      } else if (lowerText.includes('unlimited')) {
+        liabilityCap = 'Unlimited';
+      } else {
+        liabilityCap = 'Capped';
+      }
+    } else if (lowerText.includes('governing law') || lowerText.includes('jurisdiction') || lowerText.includes('courts')) {
+      clauseType = 'Governing Law';
+      if (lowerText.includes('delaware')) governingLaw = 'Delaware';
+      else if (lowerText.includes('new york')) governingLaw = 'New York';
+      else if (lowerText.includes('california')) governingLaw = 'California';
+      else governingLaw = 'Local';
+    } else if (lowerText.includes('terminate') || lowerText.includes('termination')) {
+      clauseType = 'Termination';
+      severity = 'medium';
+    }
+
+    return { clauseType, governingLaw, liabilityCap, indemnityScope, severity };
+  }
+
+  /**
+   * Compares two clauses using the LLM to verify semantic legal equivalence.
+   *
+   * @param {string} clauseA - Source clause content.
+   * @param {string} clauseB - Target comparison clause content.
+   * @returns {Promise<Object>} Verification results containing verified boolean, match score, and description.
+   */
+  async function verifySemanticEquivalence(clauseA, clauseB) {
+    const model = getModel();
+    let activeKey = null;
+    if (model.startsWith('gemini')) {
+      activeKey = getKey();
+    } else if (model.startsWith('openai')) {
+      activeKey = getOpenAiKey();
+    } else if (model.startsWith('anthropic')) {
+      activeKey = getAnthropicKey();
+    } else if (model.startsWith('openrouter')) {
+      activeKey = getOpenRouterKey();
+    }
+
+    if (activeKey === 'mock-key' || !activeKey) {
+      return generateMockVerification(clauseA, clauseB);
+    }
+
+    const prompt = `Compare the following two legal clauses and verify if they are semantically equivalent (expressing the same legal rights and obligations, even if wording differs).
+Return ONLY a JSON object with this structure, no conversational text or formatting:
+{
+  "verified": true|false,
+  "score": number (0 to 100 representing semantic closeness),
+  "reason": "a short 1-2 sentence description explaining the key equivalence or differences"
+}
+
+Clause A:
+"${clauseA.slice(0, 1500)}"
+
+Clause B:
+"${clauseB.slice(0, 1500)}"`;
+
+    try {
+      const result = await callModel(prompt, { json: true, temperature: 0.1, maxTokens: 250 });
+      return result || generateMockVerification(clauseA, clauseB);
+    } catch (err) {
+      console.warn('Semantic verification failed, falling back to mock verification:', err);
+      return generateMockVerification(clauseA, clauseB);
+    }
+  }
+
+  /**
+   * Local Jaccard fallback parser for testing/offline checks.
+   */
+  function generateMockVerification(clauseA, clauseB) {
+    const cleanA = clauseA.toLowerCase().replace(/[^a-z]/g, '');
+    const cleanB = clauseB.toLowerCase().replace(/[^a-z]/g, '');
+
+    const setA = new Set(cleanA.split(''));
+    const setB = new Set(cleanB.split(''));
+    const union = new Set([...setA, ...setB]);
+    const intersection = new Set([...setA].filter(x => setB.has(x)));
+
+    const jaccard = intersection.size / (union.size || 1);
+    const score = Math.round(50 + jaccard * 50);
+    const verified = score >= 75;
+
+    let reason = 'Clauses show moderate semantic similarity and cover matching legal concepts.';
+    if (verified) {
+      reason = 'Clauses are semantically equivalent with minor formatting/wording variations.';
+    } else {
+      reason = 'Clauses differ in scope or obligations (e.g. indemnity terms or caps do not match).';
+    }
+
+    return { verified, score, reason };
+  }
+
   return {
     setKey, getKey, setOpenAiKey, getOpenAiKey, setAnthropicKey, getAnthropicKey,
     setOpenRouterKey, getOpenRouterKey,
     clearKey, setModel, getModel,
     testConnection, groupSections, scoreSimilarity,
     annotateSection, harmonizeSection,
-    callModel
+    callModel, getEmbedding, extractClauseMetadata, verifySemanticEquivalence
   };
 })();

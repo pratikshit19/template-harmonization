@@ -36,6 +36,7 @@ export default function Topbar() {
     annotate: ['Annotation & Assembly', 'Smart tags, CLIs, and assembly logic'],
     dashboard: ['Consolidation Dashboard', 'Harmonization metrics and recommended modular contract structure'],
     export: ['Export Deliverables', 'Download your harmonized template and CLM configuration'],
+    docs: ['Documentation', 'Product guide, pipeline overview, API setup, and FAQ'],
   };
 
   const [title, subtitle] = meta[currentStep] || ['Harmonize', 'Sirion Contract Template Harmonizer'];

@@ -11,6 +11,7 @@ import AnnotatePanel from './components/Panels/AnnotatePanel';
 import DashboardPanel from './components/Panels/DashboardPanel';
 import ExportPanel from './components/Panels/ExportPanel';
 import LoginPanel from './components/Panels/LoginPanel';
+import DocsPanel from './components/Panels/DocsPanel';
 import supabase from './services/supabaseClient';
 
 /**
@@ -47,6 +48,8 @@ function AppContent({ addToast }) {
         return <DashboardPanel setCurrentStep={setCurrentStep} markStepComplete={markStepComplete} unlockStep={unlockStep} />;
       case 'export':
         return <ExportPanel toast={addToast} />;
+      case 'docs':
+        return <DocsPanel />;
       default:
         return <SetupPanel />;
     }

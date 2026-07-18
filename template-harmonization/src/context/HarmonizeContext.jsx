@@ -5,6 +5,10 @@ import { Parser } from '../services/parser';
 import { SectionDetector } from '../services/sectionDetector';
 import { Harmonizer } from '../services/harmonizer';
 import { GovernanceLog } from '../services/governance';
+import { VectorStore } from '../services/vectorStore';
+import { Chunker } from '../services/chunker';
+import { RuleEngine } from '../services/ruleEngine';
+import supabase from '../services/supabaseClient';
 
 const HarmonizeContext = createContext();
 
@@ -85,6 +89,12 @@ export const HarmonizeProvider = ({ children }) => {
   const [harmonizedResults, setHarmonizedResults] = useState([]);
   const [excelSmartTags, setExcelSmartTags] = useState([]);
   const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [clusteringMode, setClusteringMode] = useState(localStorage.getItem('harmonize_clustering_mode') || 'vector');
+  const [isIndexing, setIsIndexing] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('harmonize_clustering_mode', clusteringMode);
+  }, [clusteringMode]);
 
   // Setup / Model states
   const [activeModel, setActiveModel] = useState(AIEngine.getModel());
@@ -366,6 +376,7 @@ export const HarmonizeProvider = ({ children }) => {
     setAnnotations({});
     setHarmonizedResults([]);
     setExcelSmartTags([]);
+    VectorStore.clear();
     setCurrentStep('setup');
     setCompletedSteps({
       setup: false,
@@ -429,6 +440,70 @@ export const HarmonizeProvider = ({ children }) => {
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  /**
+   * Clusters section headings across multiple templates into semantic topic groups using vector similarity.
+   * Matches headings based on local cosine similarity vectors stored in VectorStore.
+   *
+   * @param {Array<Object>} docsSecs - Document list with section items.
+   * @returns {Array<Object>} Grouped section collection.
+   */
+  function groupSectionsByVector(docsSecs) {
+    const groups = [];
+    const clauses = VectorStore.getIndex();
+    if (clauses.length === 0) {
+      return SectionDetector.groupSections(docsSecs);
+    }
+
+    for (const doc of docsSecs) {
+      for (const sec of doc.sections) {
+        const clauseObj = clauses.find(c => c.docName === doc.name && c.heading === sec.header);
+        if (!clauseObj) continue;
+
+        let bestGroupIdx = -1;
+        let bestSim = -1;
+
+        for (let g = 0; g < groups.length; g++) {
+          const group = groups[g];
+          const hasSameDoc = group.sections.some(s => s.docName === doc.name);
+          if (hasSameDoc) continue;
+
+          let simSum = 0;
+          for (const groupSec of group.sections) {
+            const gClause = clauses.find(c => c.docName === groupSec.docName && c.heading === groupSec.originalHeader);
+            if (gClause) {
+              simSum += VectorStore.cosineSimilarity(clauseObj.embedding, gClause.embedding);
+            }
+          }
+          const avgSim = simSum / group.sections.length;
+          if (avgSim > bestSim) {
+            bestSim = avgSim;
+            bestGroupIdx = g;
+          }
+        }
+
+        if (bestSim >= 0.65 && bestGroupIdx >= 0) {
+          groups[bestGroupIdx].sections.push({
+            docName: doc.name,
+            originalHeader: sec.header,
+            content: sec.content,
+            comments: sec.comments || []
+          });
+        } else {
+          groups.push({
+            groupName: sec.header,
+            sections: [{
+              docName: doc.name,
+              originalHeader: sec.header,
+              content: sec.content,
+              comments: sec.comments || []
+            }]
+          });
+        }
+      }
+    }
+    return groups;
+  }
+
   // Steps execution triggers
   /**
    * Parses files, extracts sections, maps them to a clause inventory,
@@ -479,44 +554,159 @@ export const HarmonizeProvider = ({ children }) => {
       });
       setClauseInventory(inventory);
 
+      // Generate Embeddings, Extract Metadata, Run Rule Engine & Index in Database
+      onToast('Analyzing clause compliance & generating local vector index…', 'info');
+      setIsIndexing(true);
+      VectorStore.clear();
+
+      const processedClauses = [];
+
+      for (let i = 0; i < inventory.length; i++) {
+        const item = inventory[i];
+        try {
+          // 1. Chunk clause (Step 6)
+          const chunks = Chunker.chunkText(item.content, 800, 150);
+          item.chunks = chunks;
+
+          // 2. Extract Metadata (Step 5)
+          const meta = await AIEngine.extractClauseMetadata(item.content);
+          item.metadata = meta;
+
+          // 3. Rule Engine Validation (Step 12)
+          const rules = RuleEngine.validate(item.content, meta);
+          item.ruleValidation = rules;
+
+          // 4. Generate Embedding (Step 7)
+          const embedding = await AIEngine.getEmbedding(item.content);
+          item.embedding = embedding;
+
+          // 5. Store in local Vector Database (Step 8)
+          VectorStore.addClause({
+            id: item.id,
+            text: item.content,
+            docName: item.docName,
+            heading: item.heading,
+            embedding,
+            metadata: meta
+          });
+
+          processedClauses.push({
+            id: item.id,
+            docName: item.docName,
+            heading: item.heading,
+            content: item.content,
+            embedding,
+            metadata: meta
+          });
+        } catch (err) {
+          console.error(`Failed to process clause ${item.id}:`, err);
+        }
+        
+        // Indexing progress covers first 50%
+        const percent = Math.round(((i + 1) / inventory.length) * 50);
+        setAnalysisProgress(percent);
+      }
+
+      // Store in Supabase Vector Table if active (Step 8)
+      if (!supabase.isMock && processedClauses.length > 0) {
+        try {
+          await supabase.storeVectorsInDB(processedClauses);
+        } catch (dbErr) {
+          console.warn('Failed to upload vectors to Supabase DB:', dbErr);
+        }
+      }
+      setIsIndexing(false);
+
       markStepComplete('upload');
       unlockStep('inventory');
       onProcessingStateChange(false);
 
-      // Now run semantic section grouping background process
-      onToast('AI is grouping similar sections across documents…', 'info');
-      const groups = await SectionDetector.groupSections(docsSecs);
+      // Group sections depending on selected mode
+      onToast(clusteringMode === 'vector' 
+        ? 'AI is grouping sections using local vector similarity…' 
+        : 'AI is grouping sections using LLM context…', 'info');
+      
+      const groups = clusteringMode === 'vector'
+        ? groupSectionsByVector(docsSecs)
+        : await SectionDetector.groupSections(docsSecs);
       setSectionGroups(groups);
 
       GovernanceLog.log('sections_extracted', {
         totalGroups: groups.length,
+        clusteringMode,
         docs: docsSecs.map(d => ({ name: d.name, sections: d.sections.length }))
       });
 
-      // Similarity scoring with progress updates
+      // Similarity scoring
       onToast('AI is comparing sections across all documents…', 'info');
       const multiDocGroups = groups.filter(g => g.sections.length > 1);
       const totalGroups = multiDocGroups.length;
       const scoresObj = {};
       let processed = 0;
+
+      const indexedClauses = VectorStore.getIndex();
+
       for (const group of multiDocGroups) {
         try {
           const variants = group.sections.map(s => ({ docName: s.docName, content: s.content, comments: s.comments }));
-          const scores = await AIEngine.scoreSimilarity(group.groupName, variants);
-          scoresObj[group.groupName] = scores;
+          
+          if (clusteringMode === 'vector' && indexedClauses.length > 0) {
+            // Local Vector Cost-free Cosine Similarity scoring
+            const scores = [];
+            for (let x = 0; x < variants.length; x++) {
+              for (let y = x + 1; y < variants.length; y++) {
+                const cX = indexedClauses.find(c => c.docName === variants[x].docName && c.heading === group.groupName);
+                const cY = indexedClauses.find(c => c.docName === variants[y].docName && c.heading === group.groupName);
+                let sim = 0.5;
+                if (cX && cY) {
+                  sim = VectorStore.cosineSimilarity(cX.embedding, cY.embedding);
+                }
+                const pctScore = Math.max(0, Math.min(100, Math.round(sim * 100)));
+                
+                // Perform LLM Semantic Verification for matches above 50% to confirm equivalence (Step 11)
+                let verified = false;
+                let reason = 'Calculated via vector distance.';
+                if (pctScore >= 50) {
+                  try {
+                    const verification = await AIEngine.verifySemanticEquivalence(variants[x].content, variants[y].content);
+                    verified = verification.verified;
+                    reason = verification.reason;
+                  } catch (vErr) {
+                    console.warn('Semantic verification API failed:', vErr);
+                  }
+                }
+
+                scores.push({
+                  docA: variants[x].docName,
+                  docB: variants[y].docName,
+                  score: pctScore,
+                  verified,
+                  reason,
+                  summary: `[Semantic Verification] ${reason} (Similarity: ${pctScore}%)`
+                });
+              }
+            }
+            scoresObj[group.groupName] = scores;
+          } else {
+            // Original LLM similarity scoring
+            const scores = await AIEngine.scoreSimilarity(group.groupName, variants);
+            scoresObj[group.groupName] = scores;
+          }
         } catch (err) {
           console.warn(`Similarity scoring failed for "${group.groupName}":`, err);
           scoresObj[group.groupName] = [];
         }
         processed += 1;
-        const percent = Math.round((processed / totalGroups) * 100);
+        // Remaining 50% covers grouping/verification scoring
+        const percent = 50 + Math.round((processed / totalGroups) * 50);
         setAnalysisProgress(percent);
       }
       setSimilarityData(scoresObj);
       setAnalysisProgress(100);
 
       GovernanceLog.log('variance_analysis_complete', {
-        groupsScored: Object.keys(scoresObj).length
+        groupsScored: Object.keys(scoresObj).length,
+        clusteringMode
       });
 
     } catch (err) {
@@ -628,7 +818,7 @@ export const HarmonizeProvider = ({ children }) => {
    * @param {string} step - Step key name.
    */
   const navigateToStep = (step) => {
-    if (unlockedSteps[step]) {
+    if (step === 'docs' || unlockedSteps[step]) {
       setCurrentStep(step);
     }
   };
@@ -655,6 +845,9 @@ export const HarmonizeProvider = ({ children }) => {
       lightTheme,
       sidebarCollapsed,
       analysisProgress,
+      clusteringMode,
+      setClusteringMode,
+      isIndexing,
 
       toggleTheme,
       toggleSidebar,

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useHarmonize } from '../../context/HarmonizeContext';
+import { VectorStore } from '../../services/vectorStore';
 
 /**
  * SetupPanel Component.
@@ -17,7 +18,9 @@ export default function SetupPanel() {
     connectionResult,
     saveAndTestKey,
     clearSavedKey,
-    enableDemoMode
+    enableDemoMode,
+    clusteringMode,
+    setClusteringMode
   } = useHarmonize();
 
   const [inputVal, setInputVal] = useState(apiKeyInput);
@@ -165,6 +168,89 @@ export default function SetupPanel() {
             {connectionResult.text}
           </div>
         )}
+      </div>
+
+      <div className="setup-card" id="engine-config-card" style={{ marginTop: '20px', maxWidth: '780px' }}>
+        <div className="card-header" style={{ marginBottom: '16px' }}>
+          <div className="card-icon">⚙️</div>
+          <div>
+            <h3 style={{ fontSize: '20px', fontWeight: 700 }}>Clustering &amp; Match Engine</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: '4px 0 0 0' }}>Choose how sections are clustered and matched across your templates.</p>
+          </div>
+        </div>
+
+        <div className="engine-options" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', margin: '16px 0' }}>
+          <div 
+            className={`engine-option-card ${clusteringMode === 'vector' ? 'active' : ''}`}
+            onClick={() => setClusteringMode('vector')}
+            style={{
+              padding: '16px',
+              borderRadius: 'var(--radius-md)',
+              border: clusteringMode === 'vector' ? '2px solid var(--cyan)' : '1px solid var(--border)',
+              background: clusteringMode === 'vector' ? 'rgba(0, 180, 216, 0.05)' : 'var(--bg-card)',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              boxShadow: clusteringMode === 'vector' ? '0 4px 12px rgba(0, 180, 216, 0.1)' : 'none'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <input 
+                type="radio" 
+                name="clusteringMode" 
+                checked={clusteringMode === 'vector'} 
+                onChange={() => setClusteringMode('vector')}
+                style={{ accentColor: 'var(--cyan)', cursor: 'pointer' }}
+              />
+              <strong style={{ color: clusteringMode === 'vector' ? 'var(--cyan)' : 'var(--text-primary)' }}>Vector Similarity</strong>
+              <span className="badge badge-green" style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(0,168,107,0.15)', color: '#00A86B', borderRadius: '4px', fontWeight: 'bold' }}>Recommended</span>
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4, margin: 0 }}>
+              Generates vector embeddings to group documents and compute cosine similarity locally. <strong>Lightning fast, cost-effective, and scale-friendly.</strong>
+            </p>
+          </div>
+
+          <div 
+            className={`engine-option-card ${clusteringMode === 'llm' ? 'active' : ''}`}
+            onClick={() => setClusteringMode('llm')}
+            style={{
+              padding: '16px',
+              borderRadius: 'var(--radius-md)',
+              border: clusteringMode === 'llm' ? '2px solid var(--cyan)' : '1px solid var(--border)',
+              background: clusteringMode === 'llm' ? 'rgba(0, 180, 216, 0.05)' : 'var(--bg-card)',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              boxShadow: clusteringMode === 'llm' ? '0 4px 12px rgba(0, 180, 216, 0.1)' : 'none'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <input 
+                type="radio" 
+                name="clusteringMode" 
+                checked={clusteringMode === 'llm'} 
+                onChange={() => setClusteringMode('llm')}
+                style={{ accentColor: 'var(--cyan)', cursor: 'pointer' }}
+              />
+              <strong style={{ color: clusteringMode === 'llm' ? 'var(--cyan)' : 'var(--text-primary)' }}>LLM Semantic</strong>
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4, margin: 0 }}>
+              Uses direct LLM prompting to cluster section groups and evaluate similarities. <strong>Accurate, but slower and subject to API rate limits.</strong>
+            </p>
+          </div>
+        </div>
+
+        <div className="engine-status" style={{ borderTop: '1px solid var(--border)', paddingTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px' }}>
+          <span style={{ color: 'var(--text-secondary)' }}>Local Vector Store Status:</span>
+          {VectorStore.getCount() > 0 ? (
+            <span style={{ color: '#00A86B', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#00A86B', display: 'inline-block' }}></span>
+              Active ({VectorStore.getCount()} clauses indexed)
+            </span>
+          ) : (
+            <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
+              Empty (Index builds automatically upon document upload)
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="setup-card info-card" style={{ maxWidth: '780px' }}>

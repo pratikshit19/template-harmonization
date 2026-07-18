@@ -21,6 +21,7 @@ export default function ExtractPanel({ toast }) {
     annotations,
     harmonizedResults,
     excelSmartTags,
+    clauseInventory,
     updateHarmonizedResultInline,
     updateAnnotationInline,
     setCurrentStep,
@@ -193,7 +194,8 @@ export default function ExtractPanel({ toast }) {
             <div className="comparison-groups-list">
               {sectionGroups.map((group, index) => {
                 const scores = similarityData[group.groupName] || [];
-                const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
+                const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + (typeof b === 'object' ? b.score : b), 0) / scores.length) : null;
+                const isVerified = scores.some(s => s.verified);
 
                 let simLabel = 'Unique Clause';
                 let simClass = 'sim-badge-blue';
@@ -224,6 +226,15 @@ export default function ExtractPanel({ toast }) {
                 const isApproved = approvedSections[group.groupName];
                 const isEditing = editingSection === group.groupName;
 
+                // Collect metadata & rule validation from the clause inventory
+                const groupClauses = (clauseInventory || []).filter(
+                  c => c.heading === group.groupName
+                );
+                // Use first clause's metadata as representative
+                const clauseMeta = groupClauses.length > 0 ? groupClauses[0].metadata : null;
+                // Merge all rule validations from each variant into one list
+                const ruleValidation = groupClauses.flatMap(c => c.ruleValidation || []);
+
                 return (
                   <GroupedSectionCard
                     key={group.groupName}
@@ -233,12 +244,15 @@ export default function ExtractPanel({ toast }) {
                     simClass={simClass}
                     simScoreText={simScoreText}
                     isConflict={isConflict}
+                    isVerified={isVerified}
                     isSectionLoading={isSectionLoading}
                     harmResult={harmResult}
                     sectionAnn={sectionAnn}
                     isApproved={isApproved}
                     isEditing={isEditing}
                     editDraft={editDraft}
+                    clauseMeta={clauseMeta}
+                    ruleValidation={ruleValidation}
                     onHarmonizeInline={() => handleHarmonizeInline(group.groupName, group.sections)}
                     onApprove={() => setApprovedSections(prev => ({ ...prev, [group.groupName]: true }))}
                     onUnapprove={() => setApprovedSections(prev => ({ ...prev, [group.groupName]: false }))}
@@ -463,12 +477,15 @@ function GroupedSectionCard({
   simClass,
   simScoreText,
   isConflict,
+  isVerified,
   isSectionLoading,
   harmResult,
   sectionAnn,
   isApproved,
   isEditing,
   editDraft,
+  clauseMeta,
+  ruleValidation,
   onHarmonizeInline,
   onApprove,
   onUnapprove,
@@ -519,17 +536,84 @@ function GroupedSectionCard({
     }
   };
 
+  const severityColors = { high: '#ff5c7a', medium: '#ffb347', low: '#6ee7b7' };
+  const ruleStatusIcons = { pass: '✓', warning: '⚠', fail: '✕' };
+  const ruleStatusColors = { pass: '#6ee7b7', warning: '#ffb347', fail: '#ff5c7a' };
+
   return (
     <div className="comparison-group-card">
       <div className="comparison-group-header">
         <h4 className="comparison-group-title">{index + 1}. {group.groupName}</h4>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
           <span className={`sim-badge ${simClass}`}>{simLabel}{simScoreText}</span>
+          {isVerified && (
+            <span title="Semantically verified by LLM" style={{
+              fontSize: '11px', padding: '3px 8px', borderRadius: '10px',
+              background: 'rgba(110,231,183,0.15)', color: '#6ee7b7',
+              border: '1px solid rgba(110,231,183,0.3)', fontWeight: 600
+            }}>✓ Verified</span>
+          )}
+          {clauseMeta && (
+            <span title={`Clause Type: ${clauseMeta.clauseType}`} style={{
+              fontSize: '11px', padding: '3px 8px', borderRadius: '10px',
+              background: 'rgba(139,92,246,0.15)', color: '#a78bfa',
+              border: '1px solid rgba(139,92,246,0.3)', fontWeight: 600
+            }}>⚖ {clauseMeta.clauseType}</span>
+          )}
+          {clauseMeta && clauseMeta.severity && clauseMeta.severity !== 'low' && (
+            <span title={`Severity: ${clauseMeta.severity}`} style={{
+              fontSize: '11px', padding: '3px 8px', borderRadius: '10px',
+              background: `${severityColors[clauseMeta.severity]}22`,
+              color: severityColors[clauseMeta.severity],
+              border: `1px solid ${severityColors[clauseMeta.severity]}44`,
+              fontWeight: 600, textTransform: 'capitalize'
+            }}>● {clauseMeta.severity}</span>
+          )}
           <span className="hs-docs-badge" style={{ fontSize: '12px', padding: '4px 10px' }}>
             {group.sections.length} Docs
           </span>
         </div>
       </div>
+      {/* Metadata Row */}
+      {clauseMeta && (clauseMeta.governingLaw !== 'N/A' || clauseMeta.liabilityCap !== 'N/A' || clauseMeta.indemnityScope !== 'N/A') && (
+        <div style={{
+          display: 'flex', gap: '8px', flexWrap: 'wrap',
+          padding: '6px 0 2px',
+          fontSize: '11px', color: 'var(--text-muted)'
+        }}>
+          {clauseMeta.governingLaw !== 'N/A' && (
+            <span style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '2px 8px' }}>
+              🌐 {clauseMeta.governingLaw}
+            </span>
+          )}
+          {clauseMeta.liabilityCap !== 'N/A' && (
+            <span style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '2px 8px' }}>
+              🔒 Cap: {clauseMeta.liabilityCap}
+            </span>
+          )}
+          {clauseMeta.indemnityScope !== 'N/A' && (
+            <span style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '2px 8px' }}>
+              ↔ Indemnity: {clauseMeta.indemnityScope}
+            </span>
+          )}
+        </div>
+      )}
+      {/* Rule Validation Flags */}
+      {ruleValidation && ruleValidation.length > 0 && (
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', padding: '4px 0 2px' }}>
+          {ruleValidation.map((r, rIdx) => (
+            <span key={rIdx} title={r.message} style={{
+              fontSize: '11px', padding: '3px 9px', borderRadius: '10px',
+              background: `${ruleStatusColors[r.status]}18`,
+              color: ruleStatusColors[r.status],
+              border: `1px solid ${ruleStatusColors[r.status]}44`,
+              cursor: 'help', fontWeight: 500
+            }}>
+              {ruleStatusIcons[r.status]} {r.ruleName}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="slider-wrapper" style={{ padding: group.sections.length > 1 ? undefined : '0' }}>
         {group.sections.length > 1 && (

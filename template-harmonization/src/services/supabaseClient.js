@@ -102,10 +102,47 @@ const mockAuth = {
 
 const supabaseExport = isMock ? {
   auth: mockAuth,
-  isMock: true
+  isMock: true,
+  async storeVectorsInDB(clauses) {
+    console.log('[Supabase Mock] storeVectorsInDB skipped.');
+    return [];
+  },
+  async similaritySearchInDB(queryEmbedding, threshold = 0.4, limit = 20) {
+    console.log('[Supabase Mock] similaritySearchInDB skipped. Falling back to local search.');
+    return null;
+  }
 } : {
   ...supabase,
-  isMock: false
+  isMock: false,
+  async storeVectorsInDB(clauses) {
+    const rows = clauses.map(c => ({
+      id: c.id,
+      doc_name: c.docName,
+      heading: c.heading,
+      content: c.text || c.content,
+      embedding: c.embedding,
+      metadata: c.metadata || {}
+    }));
+    const { data, error } = await supabase.from('clauses').upsert(rows);
+    if (error) throw error;
+    return data;
+  },
+  async similaritySearchInDB(queryEmbedding, threshold = 0.4, limit = 20) {
+    const { data, error } = await supabase.rpc('match_clauses', {
+      query_embedding: queryEmbedding,
+      match_threshold: threshold,
+      match_count: limit
+    });
+    if (error) throw error;
+    return (data || []).map(row => ({
+      id: row.id,
+      text: row.content,
+      docName: row.doc_name,
+      heading: row.heading,
+      metadata: row.metadata || {},
+      similarityScore: row.similarity
+    }));
+  }
 };
 
 export default supabaseExport;

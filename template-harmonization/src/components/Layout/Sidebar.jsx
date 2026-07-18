@@ -81,6 +81,43 @@ export default function Sidebar() {
             );
           })}
         </ul>
+
+        {/* Separator */}
+        <div style={{
+          height: '1px',
+          background: 'var(--border)',
+          margin: sidebarCollapsed ? '8px 12px' : '8px 20px',
+        }} />
+
+        {/* Documentation — always unlocked, inside nav so overflow:auto scroll applies */}
+        {!sidebarCollapsed && (
+          <div className="nav-section-label" style={{ paddingTop: '4px' }}>Resources</div>
+        )}
+        <ul className="nav-steps">
+          <li
+            className={`nav-step${currentStep === 'docs' ? ' active' : ''}`}
+            onClick={() => setCurrentStep('docs')}
+            id="nav-docs"
+            style={{ cursor: 'pointer' }}
+          >
+            <div
+              className="step-indicator"
+              style={currentStep === 'docs' ? {
+                background: 'linear-gradient(135deg, #7c3aed, #5b21b6)',
+                border: '1px solid #a78bfa',
+                boxShadow: '0 0 12px rgba(139,92,246,0.4)',
+              } : {}}
+            >
+              <span className="step-number" style={{ fontSize: '14px' }}>📚</span>
+            </div>
+            {!sidebarCollapsed && (
+              <div className="step-info">
+                <span className="step-title">Documentation</span>
+                <span className="step-desc">Guides, pipeline &amp; FAQ</span>
+              </div>
+            )}
+          </li>
+        </ul>
       </nav>
 
       <div className="sidebar-footer" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
