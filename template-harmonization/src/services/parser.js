@@ -336,13 +336,20 @@ export const Parser = (() => {
    * @returns {Array<Object>} List of section objects containing header, rawHeader, and content.
    */
   function detectSections(text, html) {
+    const textSections = detectSectionsFromText(text || '');
+    let htmlSections = [];
     if (html) {
-      const htmlSections = detectSectionsFromHtml(html);
-      if (htmlSections.length >= 2) {
-        return htmlSections;
-      }
+      htmlSections = detectSectionsFromHtml(html);
     }
-    return detectSectionsFromText(text);
+    
+    // Choose whichever detection extracted more section headings
+    if (textSections.length > htmlSections.length && textSections.length >= 2) {
+      return textSections;
+    }
+    if (htmlSections.length >= 2) {
+      return htmlSections;
+    }
+    return textSections.length > 0 ? textSections : htmlSections;
   }
 
   /**
@@ -363,42 +370,48 @@ export const Parser = (() => {
     for (let i = 0; i < elements.length; i++) {
       const el = elements[i];
       const tagName = el.tagName.toLowerCase();
-      const text = el.textContent.trim();
+      const rawText = el.textContent || '';
+      
+      // Split element by newlines to handle elements with embedded line breaks
+      const textLines = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      if (textLines.length === 0) continue;
 
-      let isHeading = false;
-      let headingText = text;
+      for (let j = 0; j < textLines.length; j++) {
+        const lineText = textLines[j];
+        let isHeading = false;
 
-      if (['h1', 'h2', 'h3'].includes(tagName) && text.length > 2) {
-        isHeading = true;
-      }
+        if (['h1', 'h2', 'h3'].includes(tagName) && lineText.length > 2) {
+          isHeading = true;
+        }
 
-      if (!isHeading && tagName === 'p') {
-        const strongEl = el.querySelector('strong');
-        if (strongEl && strongEl.textContent.trim() === text && text.length > 2 && text.length < 150) {
-          if (isFirstLevelHeading(text)) {
+        if (!isHeading && tagName === 'p') {
+          const strongEl = el.querySelector('strong');
+          if (strongEl && strongEl.textContent.trim() === lineText && lineText.length > 2 && lineText.length < 150) {
+            if (isFirstLevelHeading(lineText)) {
+              isHeading = true;
+            }
+          }
+        }
+
+        if (!isHeading && lineText.length > 2 && lineText.length < 150) {
+          if (isFirstLevelHeading(lineText)) {
             isHeading = true;
           }
         }
-      }
 
-      if (!isHeading && text.length > 2 && text.length < 150) {
-        if (isFirstLevelHeading(text)) {
-          isHeading = true;
+        if (isHeading) {
+          if (currentHeader !== null) {
+            sections.push({
+              header: cleanHeadingName(currentHeader),
+              rawHeader: currentHeader,
+              content: currentContentParts.join('\n').trim()
+            });
+          }
+          currentHeader = lineText;
+          currentContentParts = [];
+        } else if (currentHeader !== null) {
+          currentContentParts.push(lineText);
         }
-      }
-
-      if (isHeading) {
-        if (currentHeader !== null) {
-          sections.push({
-            header: cleanHeadingName(currentHeader),
-            rawHeader: currentHeader,
-            content: currentContentParts.join('\n').trim()
-          });
-        }
-        currentHeader = headingText;
-        currentContentParts = [];
-      } else if (currentHeader !== null) {
-        currentContentParts.push(text);
       }
     }
 

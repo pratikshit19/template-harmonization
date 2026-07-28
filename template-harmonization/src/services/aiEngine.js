@@ -1,12 +1,18 @@
 import { GoogleGenAI } from '@google/genai';
 import OpenAI from 'openai';
 import Anthropic from '@anthropic-ai/sdk';
+import { pipeline, env } from '@xenova/transformers';
 import { GovernanceLog } from './governance';
 
+// Configure transformers.js to avoid running in a WebWorker if not needed, or to fetch correctly
+env.allowLocalModels = false; // We are fetching from HuggingFace Hub
+
 export const AIEngine = (() => {
-  const DEFAULT_MODEL = 'gemini-3.5-flash';
+  let embeddingQuotaExceeded = false;
+  const DEFAULT_MODEL = 'gemini-3.6-flash';
 
   const RETIRED_MODELS = [
+    'gemini-3.5-flash',
     'gemini-2.5-flash',          // deprecated for new users — use gemini-2.0-flash
     'gemini-1.5-flash',
     'gemini-1.5-flash-latest',
@@ -340,7 +346,6 @@ export const AIEngine = (() => {
             maxOutputTokens: opts.maxTokens ?? 8192,
           },
         });
-        console.log(response)
         const text = response.text ?? '';
         if (opts.json) {
           try {
@@ -605,84 +610,127 @@ ${variants.map((v, i) => `=== Version ${i + 1} — ${v.docName} ===\n${v.content
     };
   }
 
+  // --- EMBEDDING MODES ---
+
+  let embeddingPipeline = null;
+  let isLoadingModel = false;
+
   /**
-   * Generates a semantic vector embedding array for a given text input.
-   * Leverages Gemini or OpenAI embedding models depending on the active provider.
-   * If on mock mode or if the API call fails, falls back to a deterministic local vector.
+   * Retrieves the current embedding mode (nlp or transformers).
+   */
+  function getEmbeddingMode() {
+    return localStorage.getItem('harmonize_embedding_mode') || 'nlp';
+  }
+
+  /**
+   * Generates a semantic vector embedding array using the selected mode.
    *
    * @param {string} text - The input text to embed.
+   * @param {number} [dimensions=768] - Desired dimensions of the vector.
    * @returns {Promise<Array<number>>} A float array representing the vector.
    */
-  async function getEmbedding(text) {
-    const model = getModel();
-    let activeKey = null;
-    if (model.startsWith('gemini')) {
-      activeKey = getKey();
-    } else if (model.startsWith('openai')) {
-      activeKey = getOpenAiKey();
-    } else if (model.startsWith('anthropic')) {
-      activeKey = getAnthropicKey();
-    } else if (model.startsWith('openrouter')) {
-      activeKey = getOpenRouterKey();
+  async function getEmbedding(text, dimensions = 768) {
+    if (!text || typeof text !== 'string') {
+      return Array(dimensions).fill(0);
     }
-
-    if (activeKey === 'mock-key' || !activeKey) {
-      return generateMockEmbedding(text);
-    }
-
-    try {
-      if (model.startsWith('gemini')) {
-        const client = getGeminiClient();
-        const response = await client.models.embedContent({
-          model: 'text-embedding-004',
-          contents: text,
-        });
-        if (response && response.embedding && response.embedding.values) {
-          return response.embedding.values;
-        }
-        throw new Error('No embedding values returned from Gemini API');
-      } else if (model.startsWith('openai')) {
-        const client = getOpenAIClient();
-        const response = await client.embeddings.create({
-          model: 'text-embedding-3-small',
-          input: text,
-        });
-        if (response && response.data && response.data[0] && response.data[0].embedding) {
-          return response.data[0].embedding;
-        }
-        throw new Error('No embedding data returned from OpenAI API');
-      } else {
-        return generateMockEmbedding(text);
-      }
-    } catch (err) {
-      console.warn('Embedding API call failed, falling back to local mock embedding:', err);
-      return generateMockEmbedding(text);
+    
+    const mode = getEmbeddingMode();
+    if (mode === 'transformers') {
+      return getEmbeddingTransformer(text, dimensions);
+    } else {
+      return getEmbeddingNLP(text, dimensions);
     }
   }
 
   /**
-   * Generates a deterministic mock embedding vector based on a text string hash.
-   * Used for offline/demo modes.
-   *
-   * @param {string} text - The input text.
-   * @param {number} [dimensions=768] - Desired dimensions of the vector.
-   * @returns {Array<number>} Normalized float vector of unit length.
+   * Generates a semantic vector using local AI (Transformers.js).
    */
-  function generateMockEmbedding(text, dimensions = 768) {
-    let hash = 0;
-    for (let i = 0; i < text.length; i++) {
-      hash = text.charCodeAt(i) + ((hash << 5) - hash);
+  async function getEmbeddingTransformer(text, dimensions = 768) {
+    try {
+      if (!embeddingPipeline) {
+        if (!isLoadingModel) {
+          isLoadingModel = true;
+          // Load a tiny, fast embedding model (e.g., Xenova/all-MiniLM-L6-v2)
+          embeddingPipeline = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+          isLoadingModel = false;
+        } else {
+          // Wait if currently loading
+          let retries = 0;
+          while (isLoadingModel && retries < 100) {
+            await new Promise(r => setTimeout(r, 100));
+            retries++;
+          }
+        }
+      }
+
+      if (embeddingPipeline) {
+        const output = await embeddingPipeline(text, { pooling: 'mean', normalize: true });
+        const vec = Array.from(output.data);
+        // Pad or truncate to match expected dimensions
+        if (vec.length > dimensions) return vec.slice(0, dimensions);
+        if (vec.length < dimensions) return [...vec, ...Array(dimensions - vec.length).fill(0)];
+        return vec;
+      }
+    } catch (err) {
+      console.warn('Transformers.js failed, falling back to NLP:', err);
     }
-    const vec = [];
-    let seed = hash;
-    for (let d = 0; d < dimensions; d++) {
-      seed = (seed * 9301 + 49297) % 233280;
-      vec.push((seed / 233280) * 2 - 1);
-    }
-    const norm = Math.sqrt(vec.reduce((sum, v) => sum + v * v, 0));
-    return vec.map(v => v / (norm || 1));
+    return getEmbeddingNLP(text, dimensions);
   }
 
+  /**
+   * Generates a semantic vector embedding array using Classical NLP (Feature Hashing / Bag of Words).
+   * Runs entirely locally in the browser with ZERO API calls.
+   * Maps word frequencies to a fixed-size mathematical coordinate system.
+   *
+   * @param {string} text - The input text to embed.
+   * @param {number} [dimensions=768] - Desired dimensions of the vector.
+   * @returns {Promise<Array<number>>} A float array representing the vector.
+   */
+  async function getEmbeddingNLP(text, dimensions = 768) {
+    if (!text || typeof text !== 'string') {
+      return Array(dimensions).fill(0);
+    }
+    
+    // 1. Tokenize: lower case, remove punctuation, split by whitespace
+    const words = text.toLowerCase()
+      .replace(/[^a-z0-9\s]/g, '')
+      .split(/\s+/)
+      .filter(w => w.length > 2); // Ignore very short words (stop-word approximation)
+
+    // 2. Initialize vector
+    const vec = new Float32Array(dimensions);
+    
+    // 3. Feature Hashing Trick (TF - Term Frequency)
+    for (const word of words) {
+      let hash = 0;
+      for (let i = 0; i < word.length; i++) {
+        hash = ((hash << 5) - hash) + word.charCodeAt(i);
+        hash |= 0; // Convert to 32bit integer
+      }
+      // Use absolute value of hash to find index
+      const index = Math.abs(hash) % dimensions;
+      // Increment term frequency weight at this dimension
+      vec[index] += 1;
+    }
+
+    // 4. L2 Normalization (so cosine similarity works correctly)
+    let sumSquares = 0;
+    for (let i = 0; i < dimensions; i++) {
+      sumSquares += vec[i] * vec[i];
+    }
+    
+    const norm = Math.sqrt(sumSquares);
+    if (norm === 0) return Array.from(vec);
+
+    for (let i = 0; i < dimensions; i++) {
+      vec[i] = vec[i] / norm;
+    }
+
+    return Array.from(vec);
+  }
+
+  // --- MOCK MODES ---
+  
   /**
    * Extracts legal metadata (clause type, jurisdiction, liability caps) using the LLM.
    * Falls back to a keyword-based mock parser in offline/demo mode.

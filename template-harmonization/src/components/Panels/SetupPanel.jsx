@@ -20,7 +20,11 @@ export default function SetupPanel() {
     clearSavedKey,
     enableDemoMode,
     clusteringMode,
-    setClusteringMode
+    setClusteringMode,
+    lightTheme,
+    toggleTheme,
+    embeddingMode,
+    setEmbeddingMode
   } = useHarmonize();
 
   const [inputVal, setInputVal] = useState(apiKeyInput);
@@ -33,7 +37,7 @@ export default function SetupPanel() {
   }, [apiKeyInput]);
 
   const providerMap = {
-    'gemini-3.5-flash': 'gemini',
+    'gemini-3.6-flash': 'gemini',
     'openai-gpt-4o': 'openai',
     'anthropic-claude-3-5-sonnet-20241022': 'anthropic'
   };
@@ -180,60 +184,61 @@ export default function SetupPanel() {
         </div>
 
         <div className="engine-options" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', margin: '16px 0' }}>
-          <div 
-            className={`engine-option-card ${clusteringMode === 'vector' ? 'active' : ''}`}
-            onClick={() => setClusteringMode('vector')}
+          <div
+            className={`engine-option-card ${embeddingMode === 'nlp' ? 'active' : ''}`}
+            onClick={() => setEmbeddingMode('nlp')}
             style={{
               padding: '16px',
               borderRadius: 'var(--radius-md)',
-              border: clusteringMode === 'vector' ? '2px solid var(--cyan)' : '1px solid var(--border)',
-              background: clusteringMode === 'vector' ? 'rgba(0, 180, 216, 0.05)' : 'var(--bg-card)',
+              border: embeddingMode === 'nlp' ? '2px solid var(--cyan)' : '1px solid var(--border)',
+              background: embeddingMode === 'nlp' ? 'rgba(0, 180, 216, 0.05)' : 'var(--bg-card)',
               cursor: 'pointer',
               transition: 'all 0.2s ease',
-              boxShadow: clusteringMode === 'vector' ? '0 4px 12px rgba(0, 180, 216, 0.1)' : 'none'
+              boxShadow: embeddingMode === 'nlp' ? '0 4px 12px rgba(0, 180, 216, 0.1)' : 'none'
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <input 
-                type="radio" 
-                name="clusteringMode" 
-                checked={clusteringMode === 'vector'} 
-                onChange={() => setClusteringMode('vector')}
+              <input
+                type="radio"
+                name="embeddingMode"
+                checked={embeddingMode === 'nlp'}
+                onChange={() => setEmbeddingMode('nlp')}
                 style={{ accentColor: 'var(--cyan)', cursor: 'pointer' }}
               />
-              <strong style={{ color: clusteringMode === 'vector' ? 'var(--cyan)' : 'var(--text-primary)' }}>Vector Similarity</strong>
-              <span className="badge badge-green" style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(0,168,107,0.15)', color: '#00A86B', borderRadius: '4px', fontWeight: 'bold' }}>Recommended</span>
+              <strong style={{ color: embeddingMode === 'nlp' ? 'var(--cyan)' : 'var(--text-primary)' }}>Classical NLP (Hashing)</strong>
+              <span className="badge badge-green" style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(0,168,107,0.15)', color: '#00A86B', borderRadius: '4px', fontWeight: 'bold' }}>Instant</span>
             </div>
             <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4, margin: 0 }}>
-              Generates vector embeddings to group documents and compute cosine similarity locally. <strong>Lightning fast, cost-effective, and scale-friendly.</strong>
+              Generates vectors instantly using math (Feature Hashing). <strong>Zero load time, but only matches exact vocabulary.</strong>
             </p>
           </div>
 
-          <div 
-            className={`engine-option-card ${clusteringMode === 'llm' ? 'active' : ''}`}
-            onClick={() => setClusteringMode('llm')}
+          <div
+            className={`engine-option-card ${embeddingMode === 'transformers' ? 'active' : ''}`}
+            onClick={() => setEmbeddingMode('transformers')}
             style={{
               padding: '16px',
               borderRadius: 'var(--radius-md)',
-              border: clusteringMode === 'llm' ? '2px solid var(--cyan)' : '1px solid var(--border)',
-              background: clusteringMode === 'llm' ? 'rgba(0, 180, 216, 0.05)' : 'var(--bg-card)',
+              border: embeddingMode === 'transformers' ? '2px solid var(--purple)' : '1px solid var(--border)',
+              background: embeddingMode === 'transformers' ? 'rgba(157, 78, 221, 0.05)' : 'var(--bg-card)',
               cursor: 'pointer',
               transition: 'all 0.2s ease',
-              boxShadow: clusteringMode === 'llm' ? '0 4px 12px rgba(0, 180, 216, 0.1)' : 'none'
+              boxShadow: embeddingMode === 'transformers' ? '0 4px 12px rgba(157, 78, 221, 0.1)' : 'none'
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <input 
-                type="radio" 
-                name="clusteringMode" 
-                checked={clusteringMode === 'llm'} 
-                onChange={() => setClusteringMode('llm')}
-                style={{ accentColor: 'var(--cyan)', cursor: 'pointer' }}
+              <input
+                type="radio"
+                name="embeddingMode"
+                checked={embeddingMode === 'transformers'}
+                onChange={() => setEmbeddingMode('transformers')}
+                style={{ accentColor: 'var(--purple)', cursor: 'pointer' }}
               />
-              <strong style={{ color: clusteringMode === 'llm' ? 'var(--cyan)' : 'var(--text-primary)' }}>LLM Semantic</strong>
+              <strong style={{ color: embeddingMode === 'transformers' ? 'var(--purple)' : 'var(--text-primary)' }}>Local AI (Transformers.js)</strong>
+              <span className="badge badge-purple" style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(157,78,221,0.15)', color: '#9d4edd', borderRadius: '4px', fontWeight: 'bold' }}>Semantic</span>
             </div>
             <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4, margin: 0 }}>
-              Uses direct LLM prompting to cluster section groups and evaluate similarities. <strong>Accurate, but slower and subject to API rate limits.</strong>
+              Downloads a tiny 20MB semantic model to your browser. <strong>Understands meaning (invoice = payment) entirely offline!</strong>
             </p>
           </div>
         </div>

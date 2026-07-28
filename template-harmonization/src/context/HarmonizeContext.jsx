@@ -8,6 +8,9 @@ import { GovernanceLog } from '../services/governance';
 import { VectorStore } from '../services/vectorStore';
 import { Chunker } from '../services/chunker';
 import { RuleEngine } from '../services/ruleEngine';
+import { MetadataExtractor } from '../services/metadataExtractor';
+import { SmartTagDetector } from '../services/smartTagDetector';
+import { SemanticMatcher } from '../services/semanticMatcher';
 import supabase from '../services/supabaseClient';
 
 const HarmonizeContext = createContext();
@@ -62,12 +65,12 @@ export const HarmonizeProvider = ({ children }) => {
   const [currentStep, setCurrentStep] = useState('setup');
   const [unlockedSteps, setUnlockedSteps] = useState({
     setup: true,
-    upload: false,
-    inventory: false,
-    extract: false,
-    annotate: false,
-    dashboard: false,
-    export: false
+    upload: true,
+    inventory: true,
+    extract: true,
+    annotate: true,
+    dashboard: true,
+    export: true
   });
   const [completedSteps, setCompletedSteps] = useState({
     setup: false,
@@ -90,11 +93,16 @@ export const HarmonizeProvider = ({ children }) => {
   const [excelSmartTags, setExcelSmartTags] = useState([]);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [clusteringMode, setClusteringMode] = useState(localStorage.getItem('harmonize_clustering_mode') || 'vector');
+  const [embeddingMode, setEmbeddingMode] = useState(localStorage.getItem('harmonize_embedding_mode') || 'nlp');
   const [isIndexing, setIsIndexing] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('harmonize_clustering_mode', clusteringMode);
   }, [clusteringMode]);
+
+  useEffect(() => {
+    localStorage.setItem('harmonize_embedding_mode', embeddingMode);
+  }, [embeddingMode]);
 
   // Setup / Model states
   const [activeModel, setActiveModel] = useState(AIEngine.getModel());
@@ -187,15 +195,7 @@ export const HarmonizeProvider = ({ children }) => {
             setConnectionStatus('disconnected');
             setConnectionLabel('AI not connected');
             setConnectionResult({ text: `✕ Connection failed: ${parseApiError(err)}`, type: 'error' });
-            setUnlockedSteps({
-              setup: true,
-              upload: false,
-              inventory: false,
-              extract: false,
-              annotate: false,
-              dashboard: false,
-              export: false
-            });
+            unlockAllSteps();
             setCompletedSteps(prev => ({
               ...prev,
               setup: false
@@ -314,15 +314,8 @@ export const HarmonizeProvider = ({ children }) => {
       setConnectionStatus('disconnected');
       setConnectionLabel('AI not connected');
       setConnectionResult({ text: `✕ Connection failed: ${parseApiError(err)}`, type: 'error' });
-      setUnlockedSteps({
-        setup: true,
-        upload: false,
-        inventory: false,
-        extract: false,
-        annotate: false,
-        dashboard: false,
-        export: false
-      });
+      // We no longer lock steps on API failure since API is only needed at the end
+      unlockAllSteps();
       setCompletedSteps(prev => ({
         ...prev,
         setup: false
@@ -448,49 +441,80 @@ export const HarmonizeProvider = ({ children }) => {
    * @returns {Array<Object>} Grouped section collection.
    */
   function groupSectionsByVector(docsSecs) {
-    const groups = [];
+    const rawGroups = [];
     const clauses = VectorStore.getIndex();
+    
+    function normHeader(h) {
+      if (!h) return '';
+      const clean = Parser.cleanHeadingName ? Parser.cleanHeadingName(h) : h;
+      return clean.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+    }
+
     if (clauses.length === 0) {
       return SectionDetector.groupSections(docsSecs);
     }
 
     for (const doc of docsSecs) {
       for (const sec of doc.sections) {
-        const clauseObj = clauses.find(c => c.docName === doc.name && c.heading === sec.header);
-        if (!clauseObj) continue;
+        const secNorm = normHeader(sec.header);
+        const clauseObj = clauses.find(c => c.docName === doc.name && normHeader(c.heading) === secNorm);
 
+        // 1. Direct Heading Title Match check first
+        let matchedGroupIdx = rawGroups.findIndex(g => {
+          const hasSameDoc = g.sections.some(s => s.docName === doc.name);
+          return !hasSameDoc && normHeader(g.groupName) === secNorm;
+        });
+
+        if (matchedGroupIdx >= 0) {
+          rawGroups[matchedGroupIdx].sections.push({
+            docName: doc.name,
+            originalHeader: sec.header,
+            content: sec.content,
+            comments: sec.comments || []
+          });
+          continue;
+        }
+
+        // 2. Vector Cosine Similarity match check
         let bestGroupIdx = -1;
         let bestSim = -1;
 
-        for (let g = 0; g < groups.length; g++) {
-          const group = groups[g];
-          const hasSameDoc = group.sections.some(s => s.docName === doc.name);
-          if (hasSameDoc) continue;
+        if (clauseObj && clauseObj.embedding) {
+          for (let g = 0; g < rawGroups.length; g++) {
+            const group = rawGroups[g];
+            const hasSameDoc = group.sections.some(s => s.docName === doc.name);
+            if (hasSameDoc) continue;
 
-          let simSum = 0;
-          for (const groupSec of group.sections) {
-            const gClause = clauses.find(c => c.docName === groupSec.docName && c.heading === groupSec.originalHeader);
-            if (gClause) {
-              simSum += VectorStore.cosineSimilarity(clauseObj.embedding, gClause.embedding);
+            let simSum = 0;
+            let matchCount = 0;
+            for (const groupSec of group.sections) {
+              const gNorm = normHeader(groupSec.originalHeader);
+              const gClause = clauses.find(c => c.docName === groupSec.docName && normHeader(c.heading) === gNorm);
+              if (gClause && gClause.embedding) {
+                simSum += VectorStore.cosineSimilarity(clauseObj.embedding, gClause.embedding);
+                matchCount++;
+              }
             }
-          }
-          const avgSim = simSum / group.sections.length;
-          if (avgSim > bestSim) {
-            bestSim = avgSim;
-            bestGroupIdx = g;
+            if (matchCount > 0) {
+              const avgSim = simSum / matchCount;
+              if (avgSim > bestSim) {
+                bestSim = avgSim;
+                bestGroupIdx = g;
+              }
+            }
           }
         }
 
         if (bestSim >= 0.65 && bestGroupIdx >= 0) {
-          groups[bestGroupIdx].sections.push({
+          rawGroups[bestGroupIdx].sections.push({
             docName: doc.name,
             originalHeader: sec.header,
             content: sec.content,
             comments: sec.comments || []
           });
         } else {
-          groups.push({
-            groupName: sec.header,
+          rawGroups.push({
+            groupName: Parser.cleanHeadingName ? Parser.cleanHeadingName(sec.header) : sec.header,
             sections: [{
               docName: doc.name,
               originalHeader: sec.header,
@@ -501,7 +525,49 @@ export const HarmonizeProvider = ({ children }) => {
         }
       }
     }
-    return groups;
+
+    // Post-pass: Merge groups that share the same normalized clean heading
+    const mergedMap = {};
+    for (const group of rawGroups) {
+      const cleanTitle = Parser.cleanHeadingName ? Parser.cleanHeadingName(group.groupName) : group.groupName;
+      const normKey = normHeader(cleanTitle);
+      if (!mergedMap[normKey]) {
+        mergedMap[normKey] = {
+          groupName: cleanTitle,
+          sections: []
+        };
+      }
+      for (const sec of group.sections) {
+        const existingIdx = mergedMap[normKey].sections.findIndex(s => s.docName === sec.docName);
+        if (existingIdx === -1) {
+          mergedMap[normKey].sections.push(sec);
+        } else {
+          if ((sec.content || '').length > (mergedMap[normKey].sections[existingIdx].content || '').length) {
+            mergedMap[normKey].sections[existingIdx] = sec;
+          }
+        }
+      }
+    }
+
+    // Ensure all extracted sections in docsSecs are included
+    for (const doc of docsSecs) {
+      for (const sec of doc.sections) {
+        const normKey = normHeader(sec.header);
+        if (mergedMap[normKey]) {
+          const exists = mergedMap[normKey].sections.some(s => s.docName === doc.name);
+          if (!exists) {
+            mergedMap[normKey].sections.push({
+              docName: doc.name,
+              originalHeader: sec.header,
+              content: sec.content,
+              comments: sec.comments || []
+            });
+          }
+        }
+      }
+    }
+
+    return Object.values(mergedMap).filter(g => g.sections.length > 0);
   }
 
   // Steps execution triggers
@@ -569,7 +635,7 @@ export const HarmonizeProvider = ({ children }) => {
           item.chunks = chunks;
 
           // 2. Extract Metadata (Step 5)
-          const meta = await AIEngine.extractClauseMetadata(item.content);
+          const meta = MetadataExtractor.extract(item.content);
           item.metadata = meta;
 
           // 3. Rule Engine Validation (Step 12)
@@ -612,7 +678,11 @@ export const HarmonizeProvider = ({ children }) => {
         try {
           await supabase.storeVectorsInDB(processedClauses);
         } catch (dbErr) {
-          console.warn('Failed to upload vectors to Supabase DB:', dbErr);
+          if (dbErr?.code === 'PGRST205') {
+            console.info('Supabase pgvector tables not found. Using local in-memory vector store only.');
+          } else {
+            console.warn('Failed to upload vectors to Supabase DB:', dbErr);
+          }
         }
       }
       setIsIndexing(false);
@@ -621,19 +691,15 @@ export const HarmonizeProvider = ({ children }) => {
       unlockStep('inventory');
       onProcessingStateChange(false);
 
-      // Group sections depending on selected mode
-      onToast(clusteringMode === 'vector' 
-        ? 'AI is grouping sections using local vector similarity…' 
-        : 'AI is grouping sections using LLM context…', 'info');
+      // Group sections using local vector similarity
+      onToast('AI is grouping sections using local vector similarity…', 'info');
       
-      const groups = clusteringMode === 'vector'
-        ? groupSectionsByVector(docsSecs)
-        : await SectionDetector.groupSections(docsSecs);
+      const groups = groupSectionsByVector(docsSecs);
       setSectionGroups(groups);
 
       GovernanceLog.log('sections_extracted', {
         totalGroups: groups.length,
-        clusteringMode,
+        clusteringMode: 'vector',
         docs: docsSecs.map(d => ({ name: d.name, sections: d.sections.length }))
       });
 
@@ -650,48 +716,9 @@ export const HarmonizeProvider = ({ children }) => {
         try {
           const variants = group.sections.map(s => ({ docName: s.docName, content: s.content, comments: s.comments }));
           
-          if (clusteringMode === 'vector' && indexedClauses.length > 0) {
-            // Local Vector Cost-free Cosine Similarity scoring
-            const scores = [];
-            for (let x = 0; x < variants.length; x++) {
-              for (let y = x + 1; y < variants.length; y++) {
-                const cX = indexedClauses.find(c => c.docName === variants[x].docName && c.heading === group.groupName);
-                const cY = indexedClauses.find(c => c.docName === variants[y].docName && c.heading === group.groupName);
-                let sim = 0.5;
-                if (cX && cY) {
-                  sim = VectorStore.cosineSimilarity(cX.embedding, cY.embedding);
-                }
-                const pctScore = Math.max(0, Math.min(100, Math.round(sim * 100)));
-                
-                // Perform LLM Semantic Verification for matches above 50% to confirm equivalence (Step 11)
-                let verified = false;
-                let reason = 'Calculated via vector distance.';
-                if (pctScore >= 50) {
-                  try {
-                    const verification = await AIEngine.verifySemanticEquivalence(variants[x].content, variants[y].content);
-                    verified = verification.verified;
-                    reason = verification.reason;
-                  } catch (vErr) {
-                    console.warn('Semantic verification API failed:', vErr);
-                  }
-                }
-
-                scores.push({
-                  docA: variants[x].docName,
-                  docB: variants[y].docName,
-                  score: pctScore,
-                  verified,
-                  reason,
-                  summary: `[Semantic Verification] ${reason} (Similarity: ${pctScore}%)`
-                });
-              }
-            }
-            scoresObj[group.groupName] = scores;
-          } else {
-            // Original LLM similarity scoring
-            const scores = await AIEngine.scoreSimilarity(group.groupName, variants);
-            scoresObj[group.groupName] = scores;
-          }
+          // Pure vector-based similarity scoring (no LLM)
+          const scores = SemanticMatcher.scoreVariants(group.groupName, variants);
+          scoresObj[group.groupName] = scores;
         } catch (err) {
           console.warn(`Similarity scoring failed for "${group.groupName}":`, err);
           scoresObj[group.groupName] = [];
@@ -759,7 +786,8 @@ export const HarmonizeProvider = ({ children }) => {
   const startBulkAnnotations = async (onProgress, onToast) => {
     setCurrentStep('annotate');
     try {
-      const result = await Harmonizer.annotateAll(
+      // Use deterministic SmartTagDetector instead of LLM
+      const result = SmartTagDetector.annotateAll(
         sectionGroups,
         annotations,
         excelSmartTags,
@@ -786,18 +814,9 @@ export const HarmonizeProvider = ({ children }) => {
     setCurrentStep('dashboard');
     onToast('Consolidating templates & calculating metrics…', 'info');
     try {
-      const unharmonized = sectionGroups.filter(g => !harmonizedResults.some(r => r.groupName === g.groupName && !r.error));
       let currentResults = [...harmonizedResults];
-      if (unharmonized.length > 0) {
-        onToast(`AI is auto-harmonizing remaining ${unharmonized.length} sections…`, 'info');
-        currentResults = await Harmonizer.harmonizeAll(
-          sectionGroups,
-          annotations,
-          harmonizedResults,
-          (current, total, name) => { }
-        );
-        setHarmonizedResults(currentResults);
-      }
+      // Note: Removed auto-harmonization of remaining unharmonized sections.
+      // Harmonization should only occur explicitly via user action to avoid LLM token waste.
 
       const errors = currentResults.filter(r => r.error);
       if (errors.length > 0) {
@@ -847,6 +866,8 @@ export const HarmonizeProvider = ({ children }) => {
       analysisProgress,
       clusteringMode,
       setClusteringMode,
+      embeddingMode,
+      setEmbeddingMode,
       isIndexing,
 
       toggleTheme,

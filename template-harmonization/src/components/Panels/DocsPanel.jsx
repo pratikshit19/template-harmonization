@@ -137,7 +137,7 @@ export default function DocsPanel() {
     },
     {
       q: 'Which AI models are supported?',
-      a: 'Harmonize supports Google Gemini (gemini-3.5-flash), OpenAI GPT-4o, Anthropic Claude 3.5 Sonnet, and multiple models via OpenRouter (Gemini, Claude Sonnet 4, GPT-4o, Llama 4 Maverick). Switch between them from the model dropdown in the topbar.',
+      a: 'Harmonize supports Google Gemini (gemini-3.6-flash), OpenAI GPT-4o, Anthropic Claude 3.5 Sonnet, and multiple models via OpenRouter (Gemini, Claude Sonnet 4, GPT-4o, Llama 4 Maverick). Switch between them from the model dropdown in the topbar.',
     },
     {
       q: 'What document formats can I upload?',
@@ -366,14 +366,14 @@ export default function DocsPanel() {
                 {
                   name: 'Google Gemini (Recommended)',
                   color: '#60a5fa',
-                  model: 'gemini-3.5-flash',
+                  model: 'gemini-3.6-flash',
                   icon: '✦',
                   steps: [
                     'Visit https://aistudio.google.com/apikey',
                     'Sign in with your Google account',
                     'Click "Create API key" → choose a project',
                     'Copy the key and paste it in Setup → API Key field',
-                    'Select "Gemini 3.5 Flash" in the model dropdown',
+                    'Select "Gemini 3.6 Flash" in the model dropdown',
                   ],
                   limits: 'Free tier: 15 requests/min, 1M tokens/min. Sufficient for most harmonization projects.',
                 },
